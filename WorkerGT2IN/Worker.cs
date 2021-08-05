@@ -353,7 +353,7 @@ namespace WorkerGT2IN
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError($"Erro:\n{ex.Message}");
+                           await loggerController.LogError($"Erro:\n{ex.Message}");
                         }
                 }
             };
@@ -376,7 +376,7 @@ namespace WorkerGT2IN
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError($"Erro:\n{ex.Message}");
+                            await loggerController.LogError($"Erro:\n{ex.Message}");
                         }
                 }
             };
@@ -455,6 +455,9 @@ namespace WorkerGT2IN
                     await Task.Delay(5000);
 
                     await stepExecutarProceduresInservice.RunStepAsync();
+                    await Task.Delay(5000);
+
+                    await stepExecutarProceduresGTech.RunStepAsync();
                     await Task.Delay(5000);
 
                     await stepMigracaoOMS.RunStepAsync();

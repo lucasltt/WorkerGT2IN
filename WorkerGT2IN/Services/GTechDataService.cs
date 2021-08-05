@@ -183,7 +183,7 @@ namespace WorkerGT2IN.Services
                         case { } when parametro.StartsWith("Compilar"):
                             migrationConfig.Compilar.Add(oracleDataReader.GetString(1));
                             break;
-                        case { } when parametro.StartsWith("Indicador"):
+                        case { } when parametro.StartsWith("Indicadores"):
                             migrationConfig.Indicadores.Add(oracleDataReader.GetString(1));
                             break;
                         case { } when parametro.StartsWith("ProcedureInservice"):
