@@ -122,6 +122,9 @@ namespace WorkerGT2IN.Services
                         case nameof(MigrationConfig.ExecutarOMSMigration):
                             migrationConfig.ExecutarOMSMigration = oracleDataReader.GetString(1).Equals("True") ? true : false;
                             break;
+                        case nameof(MigrationConfig.MapaOMSMigration):
+                            migrationConfig.MapaOMSMigration = oracleDataReader.GetString(1);
+                            break;
                         case nameof(MigrationConfig.CaminhoOMSMigration):
                             migrationConfig.CaminhoOMSMigration = oracleDataReader.GetString(1);
                             break;
@@ -174,8 +177,11 @@ namespace WorkerGT2IN.Services
                         case nameof(MigrationConfig.CaminhoMapOrigem):
                             migrationConfig.CaminhoMapOrigem = oracleDataReader.GetString(1);
                             break;
-                        case nameof(MigrationConfig.CaminhoMapDestino):
-                            migrationConfig.CaminhoMapDestino = oracleDataReader.GetString(1);
+                        case nameof(MigrationConfig.CaminhoMapADestino):
+                            migrationConfig.CaminhoMapADestino = oracleDataReader.GetString(1);
+                            break;
+                        case nameof(MigrationConfig.CaminhoMapBDestino):
+                            migrationConfig.CaminhoMapBDestino = oracleDataReader.GetString(1);
                             break;
                         case { } when parametro.StartsWith("ServicoISM"):
                             migrationConfig.ServicosISM.Add(oracleDataReader.GetString(1));

@@ -66,6 +66,7 @@ namespace WorkerGT2IN.Entities
         public bool ExecutarOMSMigration { get; set; }
         public string CaminhoOMSMigration { get; set; }
         public string ArgumentoOMSMigration { get; set; }
+        public string MapaOMSMigration { get; set; }
 
 
         public bool DeletarArquivoNET { get; set; }
@@ -90,8 +91,8 @@ namespace WorkerGT2IN.Entities
 
         public bool CopiarArquivoMAP { get; set; }
         public string CaminhoMapOrigem { get; set; }
-        public string CaminhoMapDestino { get; set; }
-
+        public string CaminhoMapADestino { get; set; }
+        public string CaminhoMapBDestino { get; set; }
 
     }
 }

@@ -33,5 +33,19 @@ namespace WorkerGT2IN.Controller
             await _telegramController.SendErrorAsync(message);
         }
 
+
+        public async Task LogDebug(string message)
+        {
+            _logger.LogDebug(message);
+            await _telegramController.SendDebugAsync(message);
+        }
+
+
+        public async Task LogAlert(string message)
+        {
+            _logger.LogWarning(message);
+            await _telegramController.SendAlertAsync(message);
+        }
+
     }
 }

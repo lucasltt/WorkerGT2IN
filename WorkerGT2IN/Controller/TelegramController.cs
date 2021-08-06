@@ -14,6 +14,8 @@ namespace WorkerGT2IN.Controller
         private readonly TelegramBotClient _telegramBotClient;
         private readonly string _oracleConnectionString;
 
+        private const string noCommandPermission = "Desculpe {0}, você não tem permissão para executar comandos";
+
         public List<TelegramConfig> TelegramSubscriptions { get; set; } = new List<TelegramConfig>();
 
         public TelegramController(TelegramBotClient telegramBotClient, string oracleConnectionString)
@@ -38,15 +40,15 @@ namespace WorkerGT2IN.Controller
 
             response = command switch
             {
-                "/FORCARINICIO" => await CommandForcarInicioAsync(username),
-                "/ATIVARMETADADOS" => await CommandMetadados(username, true),
-                "/DESATIVARMETADADOS" => await CommandMetadados(username, false),
-                "/ATIVARDADOS" => await CommandDados(username, true),
-                "/DESATIVARDADOS" => await CommandDados(username, false),
-                "/ATIVARDGN" => await CommandDGN(username, true),
-                "/DESATIVARDGN" => await CommandDGN(username, false),
-                "/ATIVARCOPIADGN" => await CommandCopiarDGN(username, true),
-                "/DESATIVARCOPIADGN" => await CommandCopiarDGN(username, false),
+                "/FORCARINICIO" => await CommandForcarInicioAsync(username, chatid),
+                "/ATIVARMETADADOS" => await CommandMetadados(username, chatid, true),
+                "/DESATIVARMETADADOS" => await CommandMetadados(username, chatid, false),
+                "/ATIVARDADOS" => await CommandDados(username, chatid, true),
+                "/DESATIVARDADOS" => await CommandDados(username, chatid, false),
+                "/ATIVARDGN" => await CommandDGN(username, chatid, true),
+                "/DESATIVARDGN" => await CommandDGN(username, chatid, false),
+                "/ATIVARCOPIADGN" => await CommandCopiarDGN(username, chatid, true),
+                "/DESATIVARCOPIADGN" => await CommandCopiarDGN(username, chatid, false),
                 "/INSCREVER" => await CommandInscreverAsync(username, chatid),
                 "/DESINSCREVER" => await CommandDesinscreverAsync(username, chatid),
                 _ => CommandNotFound()
@@ -54,6 +56,15 @@ namespace WorkerGT2IN.Controller
 
             await _telegramBotClient.SendTextMessageAsync(chatid, response);
 
+        }
+
+        private bool UserCanControl(long chatid)
+        {
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions)
+                if (telegramConfig.ChatId == chatid)
+                    if (telegramConfig.NotificationLevel == 2) return false;
+
+            return true;
         }
 
 
@@ -69,6 +80,19 @@ namespace WorkerGT2IN.Controller
                 await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, "❗" + message);
         }
 
+        public async Task SendDebugAsync(string message)
+        {
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions.Where(k => k.NotificationLevel == 0))
+                await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, "⚙️" + message);
+        }
+
+
+        public async Task SendAlertAsync(string message)
+        {
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions)
+                await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, "🔔" + message);
+        }
+
         public void StartReceiving() =>  _telegramBotClient.StartReceiving();
         public void StopReceiving() => _telegramBotClient.StopReceiving();
 
@@ -77,8 +101,9 @@ namespace WorkerGT2IN.Controller
         {
             try
             {
-                await DeleteTelegramConfigAsync(chatid);
-
+              
+                    await DeleteTelegramConfigAsync(chatid);
+ 
             }
             catch
             {
@@ -88,12 +113,14 @@ namespace WorkerGT2IN.Controller
 
         }
 
-        private async Task<string> CommandForcarInicioAsync(string username)
+        private async Task<string> CommandForcarInicioAsync(string username, long chatid)
         {
             try
             {
-                await UpdateSingleMigrationConfig(nameof(MigrationConfig.ForcarPublicacao), "True");
-
+                if (UserCanControl(chatid))
+                    await UpdateSingleMigrationConfig(nameof(MigrationConfig.ForcarPublicacao), "True");
+                else
+                    return string.Format(noCommandPermission, username);
             }
             catch
             {
@@ -105,12 +132,14 @@ namespace WorkerGT2IN.Controller
         }
 
 
-        private async Task<string> CommandMetadados(string username, bool ativar)
+        private async Task<string> CommandMetadados(string username, long chatid, bool ativar)
         {
             try
             {
-                await UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicarMetadados), ativar ? "True" : "False");
-
+                if (UserCanControl(chatid))
+                    await UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicarMetadados), ativar ? "True" : "False");
+                else
+                    return string.Format(noCommandPermission, username);
             }
             catch
             {
@@ -123,12 +152,14 @@ namespace WorkerGT2IN.Controller
 
 
 
-        private async Task<string> CommandDados(string username, bool ativar)
+        private async Task<string> CommandDados(string username, long chatid, bool ativar)
         {
             try
             {
-                await UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicarDados), ativar ? "True" : "False");
-
+                if (UserCanControl(chatid))
+                    await UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicarDados), ativar ? "True" : "False");
+                else
+                    return string.Format(noCommandPermission, username);
             }
             catch
             {
@@ -140,12 +171,14 @@ namespace WorkerGT2IN.Controller
         }
 
 
-        private async Task<string> CommandDGN(string username, bool ativar)
+        private async Task<string> CommandDGN(string username, long chatid, bool ativar)
         {
             try
             {
-                await UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicarDGN), ativar ? "True" : "False");
-
+                if (UserCanControl(chatid))
+                    await UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicarDGN), ativar ? "True" : "False");
+                else
+                    return string.Format(noCommandPermission, username);
             }
             catch
             {
@@ -158,12 +191,14 @@ namespace WorkerGT2IN.Controller
 
 
 
-        private async Task<string> CommandCopiarDGN(string username, bool ativar)
+        private async Task<string> CommandCopiarDGN(string username, long chatid, bool ativar)
         {
             try
             {
-                await UpdateSingleMigrationConfig(nameof(MigrationConfig.CopiarDGN), ativar ? "True" : "False");
-
+                if (UserCanControl(chatid))
+                    await UpdateSingleMigrationConfig(nameof(MigrationConfig.CopiarDGN), ativar ? "True" : "False");
+                else
+                    return string.Format(noCommandPermission, username);
             }
             catch
             {
@@ -184,39 +219,61 @@ namespace WorkerGT2IN.Controller
 
             try
             {
-                await InsertTelegramConfigAsync(telegramConfig);
+                if(await InsertTelegramConfigAsync(telegramConfig))
+                    return $"Tudo certo {username}\nAgora você receberá notificações do processo!";
+                else
+                    return $"Olá {username}\nVocê ja esta inscrito para receber notificações!";
 
             }
             catch
             {
                 return $"Olá {username}\nOcorreu um erro com sua inscrição!";
             }
-            return $"Tudo certo {username}\nAgora você receberá notificações do processo!";
+           
 
         }
 
 
         private string CommandNotFound() => "Seu comando não foi reconhecido.";
 
-        private async Task InsertTelegramConfigAsync(TelegramConfig telegramConfig)
+        private async Task<bool> InsertTelegramConfigAsync(TelegramConfig telegramConfig)
         {
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommand = new("insert into g2i_telegram(username, chatid, notificationlevel) values(:usr, :cht, :nti)", oracleConnection);
-                oracleCommand.BindByName = true;
+                using OracleCommand oracleCommandInsert = new("insert into g2i_telegram(username, chatid, notificationlevel) values(:usr, :cht, :nti)", oracleConnection);
+                using OracleCommand oracleCommandSelect = new("select count(1) from g2i_telegram where chatid = :cht)", oracleConnection);
+
+                oracleCommandInsert.BindByName = true;
                 OracleParameter oracleParameter1 = new("usr", telegramConfig.Username);
                 OracleParameter oracleParameter2 = new("cht", telegramConfig.ChatId);
                 OracleParameter oracleParameter3 = new("nti", telegramConfig.NotificationLevel);
-                oracleCommand.Parameters.Add(oracleParameter1);
-                oracleCommand.Parameters.Add(oracleParameter2);
-                oracleCommand.Parameters.Add(oracleParameter3);
+                oracleCommandInsert.Parameters.Add(oracleParameter1);
+                oracleCommandInsert.Parameters.Add(oracleParameter2);
+                oracleCommandInsert.Parameters.Add(oracleParameter3);
+
+                oracleCommandSelect.BindByName = true;
+                OracleParameter oracleParameter4 = new("cht", telegramConfig.ChatId);
+                oracleCommandSelect.Parameters.Add(oracleParameter4);
+
+
+
+
                 await oracleConnection.OpenAsync();
-                oracleCommand.ExecuteNonQuery();
-                oracleCommand.CommandText = "commit";
-                oracleCommand.ExecuteNonQuery();
+
+                int registros = Convert.ToInt32(await oracleCommandSelect.ExecuteScalarAsync());
+                if(registros > 0)
+                {
+                    await oracleConnection.CloseAsync();
+                    return false;
+                }
+
+                oracleCommandInsert.ExecuteNonQuery();
+                oracleCommandInsert.CommandText = "commit";
+                oracleCommandInsert.ExecuteNonQuery();
 
                 await oracleConnection.CloseAsync();
+                return true;
             }
             catch
             {

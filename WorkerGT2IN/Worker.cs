@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Hosting;
+Ôªøusing Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -35,23 +35,27 @@ namespace WorkerGT2IN
         private CopyFileService copyFileService;
         private DeleteFileService deleteFileService;
         private ISMProcessService ismProcessService;
+        private CheckErrorOnFileService checkErrorOnFileService;
 
-        private StepBase stepPublicarMetadados;
-        private StepBase stepPublicarDados;
-        private StepBase stepPublicarDGN;
-        private StepBase stepCopiarDGN;
-        private StepBase stepCongelarFila;
-        private StepBase stepExecutarProceduresInservice;
-        private StepBase stepExecutarProceduresGTech;
-        private StepBase stepMigracaoOMS;
-        private StepBase stepPararServicos;
-        private StepBase stepDeletarArquivoNET;
-        private StepBase stepUnirArquivoMAP;
-        private StepBase stepCopiarArquivoMAP;
-        private StepBase stepIniciarServicos;
-        private StepBase stepCompilarObjetos;
-        private StepBase stepIndicadores;
-        private StepBase stepDescongelarFila;
+        //private StepBase stepPublicarMetadados;
+        //private StepBase stepPublicarDados;
+        //private StepBase stepPublicarDGN;
+        //private StepBase stepCopiarDGN;
+        //private StepBase stepCongelarFila;
+        //private StepBase stepExecutarProceduresInservice;
+        //private StepBase stepExecutarProceduresGTech;
+        //private StepBase stepMigracaoOMS;
+        //private StepBase stepPararServicos;
+        //private StepBase stepDeletarArquivoNET;
+        //private StepBase stepUnirArquivoMAP;
+        //private StepBase stepCopiarArquivoMAP;
+        //private StepBase stepIniciarServicos;
+        //private StepBase stepCompilarObjetos;
+        //private StepBase stepIndicadores;
+        //private StepBase stepDescongelarFila;
+
+
+        List<StepBase> steps = new List<StepBase>();
 
 
         public Worker(ILogger<Worker> logger, IOptions<ServiceConfig> options)
@@ -62,15 +66,19 @@ namespace WorkerGT2IN
             gtechOracleDataService = new(_options.Value.GTechConnectionString);
             inServiceOracleDataService = new(_options.Value.InServiceConnectionString);
             telegramController = new(new(_options.Value.TelegramBotKey), _options.Value.GTechConnectionString);
-            loggerController = new (_logger, telegramController);
+            loggerController = new(_logger, telegramController);
 
 
-            stepPublicarMetadados = new()
+
+            StepBase step;
+
+            //stepPublicarMetadados
+            step = new()
             {
-                StepName = "PublicaÁ„o de metadados",
+                StepName = "Publica√ß√£o de metadados",
                 StepNumber = 1,
                 Logger = loggerController,
-                IsStepEnabled = delegate()
+                IsStepEnabled = delegate ()
                 {
                     return migrationConfig.PublicarMetadados;
                 },
@@ -83,10 +91,12 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
 
-            stepPublicarDados = new()
+            //stepPublicarDados
+            step = new()
             {
-                StepName = "PublicaÁ„o de dados",
+                StepName = "Publica√ß√£o de dados",
                 StepNumber = 2,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
@@ -101,10 +111,13 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
 
-            stepPublicarDGN = new()
+
+            //stepPublicarDGN
+            step = new()
             {
-                StepName = "PublicaÁ„o de DGN",
+                StepName = "Publica√ß√£o de DGN",
                 StepNumber = 3,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
@@ -119,10 +132,13 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
 
-            stepCopiarDGN = new()
+
+            //stepCopiarDGN
+            step = new()
             {
-                StepName = "CÛpia de DGN",
+                StepName = "C√≥pia de DGN",
                 StepNumber = 4,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
@@ -136,9 +152,10 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
 
-
-            stepCongelarFila = new()
+            //stepCongelarFila
+            step = new()
             {
                 StepName = "Congelar Fila de Indicadores",
                 StepNumber = 5,
@@ -151,15 +168,17 @@ namespace WorkerGT2IN
                 {
                     while (await inServiceOracleDataService.CongelarFilaAsync(migrationConfig.ComandoCongelarFila) == false)
                     {
-                        _logger.LogDebug($"[{ DateTime.Now}] Fila N„o Congelou. Aguardando.");
+                        await loggerController.LogDebug($"Fila N√£o Congelou. Aguardando.");
                         await Task.Delay(migrationConfig.EsperaCongelarFilaSegundos * 1000);
                     }
                 }
             };
 
-           
+            steps.Add(step);
 
-            stepExecutarProceduresInservice = new()
+
+            //stepExecutarProceduresInservice
+            step = new()
             {
                 StepName = "Executar Procedures InService",
                 StepNumber = 6,
@@ -171,19 +190,19 @@ namespace WorkerGT2IN
                 ExecuteStep = async delegate ()
                 {
                     foreach (string procedure in migrationConfig.ProceduresInservice)
-                        try
-                        {
-                            await inServiceOracleDataService.RunCommand(procedure);
-                        }
-                        catch(Exception ex)
-                        {
-                            await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
-                        }
+                    {
+                        await loggerController.LogDebug($"Executando instru√ß√£o: {procedure}");
+                        await inServiceOracleDataService.RunCommand(procedure);
+                        await Task.Delay(1000);
+                    }
                 }
             };
 
+            steps.Add(step);
 
-            stepExecutarProceduresGTech = new()
+
+            //ExecutarProceduresGTech
+            step = new()
             {
                 StepName = "Executar Procedures GTech",
                 StepNumber = 7,
@@ -195,29 +214,52 @@ namespace WorkerGT2IN
                 ExecuteStep = async delegate ()
                 {
                     foreach (string procedure in migrationConfig.ProceduresGTech)
-                        try
-                        {
-                            await gtechOracleDataService.RunCommand(procedure);
-                        }
-                        catch (Exception ex)
-                        {
-                            await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
-                        }
+                    {
+                        await loggerController.LogDebug($"Executando instru√ß√£o: {procedure}");
+                        await gtechOracleDataService.RunCommand(procedure);
+                        await Task.Delay(1000);
+                    }
                 }
             };
 
+            steps.Add(step);
 
 
-
-            stepMigracaoOMS = new()
+            //stepMigracaoOMS
+            step = new()
             {
-                StepName = "MigraÁ„o OMS",
+                StepName = "Migra√ß√£o OMS",
                 StepNumber = 8,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
                     return migrationConfig.ExecutarOMSMigration;
                 },
+                //PreFlight = async delegate ()
+                //{
+                //    deleteFileService = new DeleteFileService(migrationConfig.LogsOMSMigration, "*.log");
+                //    await deleteFileService.DeleteAsync();
+                //},
+                //ValidateResults = async delegate()
+                //{
+                //    bool isValid = true;
+
+                //    try
+                //    {
+                //        foreach (string file in System.IO.Directory.GetFiles(migrationConfig.LogsOMSMigration, "*.log"))
+                //        {
+                //            checkErrorOnFileService = new(file);
+                //            if (await checkErrorOnFileService.ErrorExistsOnFileAsync())
+                //                isValid = false;
+                //        }
+
+                //    }
+                //    catch
+                //    {
+                //        return false;
+                //    }
+                //    return isValid;
+                //},
                 ExecuteStep = async delegate ()
                 {
                     runExternalExecutableService = new(migrationConfig.CaminhoOMSMigration, migrationConfig.ArgumentoOMSMigration);
@@ -225,10 +267,12 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
 
-            stepPararServicos = new()
+            //stepPararServicos
+            step = new()
             {
-                StepName = "Parar ServiÁos",
+                StepName = "Parar Servi√ßos",
                 StepNumber = 9,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
@@ -237,7 +281,7 @@ namespace WorkerGT2IN
                 },
                 ExecuteStep = async delegate ()
                 {
-                    ismProcessService = new (migrationConfig.CaminhoISMRequest);
+                    ismProcessService = new(migrationConfig.CaminhoISMRequest);
                     foreach (string servico in migrationConfig.ServicosISM)
                         try
                         {
@@ -250,10 +294,11 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
 
 
-
-            stepUnirArquivoMAP = new()
+            //stepUnirArquivoMAP
+            step = new()
             {
                 StepName = "Unir Arquivos .MAP",
                 StepNumber = 10,
@@ -270,9 +315,10 @@ namespace WorkerGT2IN
             };
 
 
+            steps.Add(step);
 
-
-            stepCopiarArquivoMAP = new()
+            //stepCopiarArquivoMAP
+            step = new()
             {
                 StepName = "Copiar Arquivo .MAP",
                 StepNumber = 11,
@@ -283,16 +329,23 @@ namespace WorkerGT2IN
                 },
                 ExecuteStep = async delegate ()
                 {
-                    copyFileService = new(migrationConfig.CaminhoMapOrigem, migrationConfig.CaminhoMapDestino);
+                   
+                    string map = await inServiceOracleDataService.GetCurrentMapAsync();
+
+                    string targetPath = map == "A" ? migrationConfig.CaminhoMapBDestino : migrationConfig.CaminhoMapADestino;
+                    await loggerController.LogDebug($"Mapa Atual: {map}\nDestino: {targetPath}");
+                    copyFileService = new(migrationConfig.CaminhoMapOrigem, targetPath);
                     await copyFileService.CopyAsync();
+
+                    await inServiceOracleDataService.UpdateMapAsync();
                 }
             };
 
+            steps.Add(step);
 
 
-
-
-            stepDeletarArquivoNET = new()
+            //stepDeletarArquivoNET
+            step = new()
             {
                 StepName = "Deletar Arquivos .NET",
                 StepNumber = 12,
@@ -308,12 +361,12 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
 
-
-
-            stepIniciarServicos = new()
+            //stepIniciarServicos
+            step = new()
             {
-                StepName = "Iniciar ServiÁos",
+                StepName = "Iniciar Servi√ßos",
                 StepNumber = 13,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
@@ -335,7 +388,10 @@ namespace WorkerGT2IN
             };
 
 
-            stepCompilarObjetos = new()
+            steps.Add(step);
+
+            //stepCompilarObjetos
+            step = new()
             {
                 StepName = "Compilar Objetos",
                 StepNumber = 14,
@@ -347,18 +403,19 @@ namespace WorkerGT2IN
                 ExecuteStep = async delegate ()
                 {
                     foreach (string procedure in migrationConfig.Compilar)
-                        try
-                        {
-                            await inServiceOracleDataService.RunCommand(procedure);
-                        }
-                        catch (Exception ex)
-                        {
-                           await loggerController.LogError($"Erro:\n{ex.Message}");
-                        }
+                    {
+                        await loggerController.LogDebug($"Executando instru√ß√£o: {procedure}");
+                        await inServiceOracleDataService.RunCommand(procedure);
+                        await Task.Delay(1000);
+                    }
                 }
             };
 
-            stepIndicadores = new()
+
+            steps.Add(step);
+
+            //stepIndicadores
+            step = new()
             {
                 StepName = "Indicadores",
                 StepNumber = 15,
@@ -370,19 +427,20 @@ namespace WorkerGT2IN
                 ExecuteStep = async delegate ()
                 {
                     foreach (string procedure in migrationConfig.Indicadores)
-                        try
-                        {
-                            await inServiceOracleDataService.RunCommand(procedure);
-                        }
-                        catch (Exception ex)
-                        {
-                            await loggerController.LogError($"Erro:\n{ex.Message}");
-                        }
+                    {
+                        await loggerController.LogDebug($"Executando instru√ß√£o: {procedure}");
+                        await inServiceOracleDataService.RunCommand(procedure);
+                        await Task.Delay(1000);
+                    }
                 }
             };
 
 
-            stepDescongelarFila = new()
+            steps.Add(step);
+
+
+            //stepDescongelarFila
+            step = new()
             {
                 StepName = "Descongelar Fila de Indicadores",
                 StepNumber = 16,
@@ -398,14 +456,18 @@ namespace WorkerGT2IN
                 }
             };
 
+            steps.Add(step);
+
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Executando o serviÁo de migraÁ„o G/Technology para Inservice");
-            _logger.LogInformation($"Conex„o GTech: {_options.Value.GTechConnectionString}");
-            _logger.LogInformation($"Conex„o Inservice: {_options.Value.InServiceConnectionString}");
+            _logger.LogInformation("Executando o servi√ßo de migra√ß√£o G/Technology para Inservice");
+            _logger.LogInformation($"Conex√£o GTech: {_options.Value.GTechConnectionString}");
+            _logger.LogInformation($"Conex√£o Inservice: {_options.Value.InServiceConnectionString}");
             _logger.LogInformation($"Ambiente: {_options.Value.MachineDescription}");
+            _logger.LogInformation($"Vers√£o: 1.2.1");
+
 
 
             telegramController.StartReceiving();
@@ -413,7 +475,7 @@ namespace WorkerGT2IN
 
             while (!stoppingToken.IsCancellationRequested)
             {
-               // _logger.LogInformation("Executando ciclo ‡s: {time}", DateTimeOffset.Now);
+               // _logger.LogInformation("Executando ciclo √†s: {time}", DateTimeOffset.Now);
 
                 telegramController.TelegramSubscriptions = await telegramController.ReadTelegramConfigAsync();
 
@@ -437,66 +499,51 @@ namespace WorkerGT2IN
                     stopWatch = new Stopwatch();
                     stopWatch.Start();
 
-                    await loggerController.LogInformation($"Executando ciclo ‡s: {DateTime.Now} no ambiente: {_options.Value.MachineDescription}");
+                    await loggerController.LogInformation($"‚ñ∂Ô∏èExecutando ciclo √†s: {DateTime.Now} no ambiente: {_options.Value.MachineDescription}");
 
-                    await stepPublicarMetadados.RunStepAsync();
-                    await Task.Delay(5000);
+                    int nextStep = 1;
+                    foreach (StepBase step in steps)
+                    {
+                        if (step.StepNumber == nextStep)
+                        {
+                            try
+                            {
+                                await step.RunStepAsync();
+                                nextStep++;
+                                await Task.Delay(4000);
+                            }
+                            catch
+                            {
+                                switch(step.StepNumber)
+                                {
+                                    case <= 5:
+                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo ser√° abortado!");
+                                        nextStep = 20;
+                                        break;
+                                    case >= 6 and <= 13:
+                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo passar√° para o passo 16!");
+                                        nextStep = 16;
+                                        break;
+                                    case >= 14 and <= 16:
+                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo ser√° abortado e exije interven√ßao manual!");
+                                        nextStep = 20;
+                                        break;
 
-                    await stepPublicarDados.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepPublicarDGN.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepCopiarDGN.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepCongelarFila.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepExecutarProceduresInservice.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepExecutarProceduresGTech.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepMigracaoOMS.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepPararServicos.RunStepAsync();
-                    await Task.Delay(5000);
-
-
-                    await stepUnirArquivoMAP.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepCopiarArquivoMAP.RunStepAsync();
-                    await Task.Delay(5000);
+                                }
 
 
+                            }
 
-                    await stepDeletarArquivoNET.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepIniciarServicos.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepCompilarObjetos.RunStepAsync();
-                    await Task.Delay(5000);
-
-
-                    await stepIndicadores.RunStepAsync();
-                    await Task.Delay(5000);
-
-                    await stepDescongelarFila.RunStepAsync();
-                    await Task.Delay(5000);
+                           
+                        }
+                    }
 
                     await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.ForcarPublicacao), "False");
                     await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicouHoje), "True");
 
                     stopWatch.Stop();
 
-                    await loggerController.LogInformation($"TÈrmino do ciclo ‡s: {DateTime.Now} no ambiente: {_options.Value.MachineDescription}\nDuraÁ„o total: {stopWatch.Elapsed}");
+                    await loggerController.LogInformation($"üèÅT√©rmino do ciclo √†s: {DateTime.Now} no ambiente: {_options.Value.MachineDescription}\nDura√ß√£o total: {stopWatch.Elapsed}");
                 }
 
                 await Task.Delay(_options.Value.TempoEspera, stoppingToken);
@@ -507,7 +554,7 @@ namespace WorkerGT2IN
 
         public override Task StartAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation($"Iniciando o serviÁo de migraÁ„o G/Technology para Inservice no ambiente: {_options.Value.MachineDescription}");
+            _logger.LogInformation($"Iniciando o servi√ßo de migra√ß√£o G/Technology para Inservice no ambiente: {_options.Value.MachineDescription}");
 
             return base.StartAsync(cancellationToken);
         }
@@ -515,7 +562,7 @@ namespace WorkerGT2IN
 
         public override Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation($"Parando o serviÁo de migraÁ„o G/Technology para Inservice no ambiente: {_options.Value.MachineDescription}");
+            _logger.LogInformation($"Parando o servi√ßo de migra√ß√£o G/Technology para Inservice no ambiente: {_options.Value.MachineDescription}");
 
 
             return base.StopAsync(cancellationToken);
