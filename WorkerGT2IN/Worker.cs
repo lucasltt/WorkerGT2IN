@@ -14,6 +14,7 @@ using Telegram.Bot;
 using Telegram.Bot.Args;
 using WorkerGT2IN.Controller;
 using System.Diagnostics;
+using System.IO;
 
 namespace WorkerGT2IN
 {
@@ -54,6 +55,8 @@ namespace WorkerGT2IN
         //private StepBase stepIndicadores;
         //private StepBase stepDescongelarFila;
 
+        StepBase stepRollback;
+
 
         List<StepBase> steps = new List<StepBase>();
 
@@ -86,7 +89,6 @@ namespace WorkerGT2IN
                 {
                     runExternalExecutableService = new(migrationConfig.CaminhoPublicadorMetadados, migrationConfig.ArgumentoPublicadorMetadados);
                     await runExternalExecutableService.RunProcessAsync();
-                    //await gtechOracleDataService.UpdateSingleConfig(nameof(MigrationConfig.PublicarMetadados), "False");
 
                 }
             };
@@ -123,6 +125,17 @@ namespace WorkerGT2IN
                 IsStepEnabled = delegate ()
                 {
                     return migrationConfig.PublicarDGN;
+                },
+                PreFlight = async delegate ()
+                {
+
+                    try
+                    {
+                        deleteFileService = new(migrationConfig.PastaOrigemDGN, "*.dgn");
+                        await deleteFileService.DeleteAsync();
+                    }
+                    catch { }
+
                 },
                 ExecuteStep = async delegate ()
                 {
@@ -192,7 +205,7 @@ namespace WorkerGT2IN
                     foreach (string procedure in migrationConfig.ProceduresInservice)
                     {
                         await loggerController.LogDebug($"Executando instrução: {procedure}");
-                        await inServiceOracleDataService.RunCommand(procedure);
+                        await inServiceOracleDataService.RunExecuteNonQueryAsync(procedure);
                         await Task.Delay(1000);
                     }
                 }
@@ -235,30 +248,22 @@ namespace WorkerGT2IN
                 {
                     return migrationConfig.ExecutarOMSMigration;
                 },
-                //PreFlight = async delegate ()
-                //{
-                //    deleteFileService = new DeleteFileService(migrationConfig.LogsOMSMigration, "*.log");
-                //    await deleteFileService.DeleteAsync();
-                //},
-                //ValidateResults = async delegate()
+                PreFlight = async delegate ()
+                {
+
+                    try
+                    {
+                        FileInfo fileInfo = new FileInfo(migrationConfig.MapaOMSMigration);
+                        await Task.Factory.StartNew(() => fileInfo.Delete());
+                    }
+                    catch { }
+
+                },
+                //ValidateResults = async delegate ()
                 //{
                 //    bool isValid = true;
-
-                //    try
-                //    {
-                //        foreach (string file in System.IO.Directory.GetFiles(migrationConfig.LogsOMSMigration, "*.log"))
-                //        {
-                //            checkErrorOnFileService = new(file);
-                //            if (await checkErrorOnFileService.ErrorExistsOnFileAsync())
-                //                isValid = false;
-                //        }
-
-                //    }
-                //    catch
-                //    {
-                //        return false;
-                //    }
-                //    return isValid;
+                //    isValid = File.Exists(migrationConfig.MapaOMSMigration);
+                //    return await Task.FromResult(isValid);;
                 //},
                 ExecuteStep = async delegate ()
                 {
@@ -400,12 +405,28 @@ namespace WorkerGT2IN
                 {
                     return migrationConfig.Compilar.Count > 0 ? true : false;
                 },
+                ValidateResults = async delegate ()
+                {
+                    bool isValid = true;
+
+                    try
+                    {
+                        int registrosInvalidos = Convert.ToInt32(await inServiceOracleDataService.RunExecuteScalarAsync("select count(1) from all_objects where status = 'INVALID' and owner = 'INDICADORES' and object_type != 'SYNONYM'"));
+                        if (registrosInvalidos > 0) isValid = false;
+
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                    return isValid;
+                },
                 ExecuteStep = async delegate ()
                 {
                     foreach (string procedure in migrationConfig.Compilar)
                     {
                         await loggerController.LogDebug($"Executando instrução: {procedure}");
-                        await inServiceOracleDataService.RunCommand(procedure);
+                        await inServiceOracleDataService.RunExecuteNonQueryAsync(procedure);
                         await Task.Delay(1000);
                     }
                 }
@@ -429,7 +450,7 @@ namespace WorkerGT2IN
                     foreach (string procedure in migrationConfig.Indicadores)
                     {
                         await loggerController.LogDebug($"Executando instrução: {procedure}");
-                        await inServiceOracleDataService.RunCommand(procedure);
+                        await inServiceOracleDataService.RunExecuteNonQueryAsync(procedure);
                         await Task.Delay(1000);
                     }
                 }
@@ -451,12 +472,34 @@ namespace WorkerGT2IN
                 },
                 ExecuteStep = async delegate ()
                 {
-                    await inServiceOracleDataService.RunCommand(migrationConfig.ComandoDescongelarFila);
+                    await inServiceOracleDataService.RunExecuteNonQueryAsync(migrationConfig.ComandoDescongelarFila);
                     await Task.Delay(migrationConfig.EsperaDescongelarFilaSegundos * 100);
                 }
             };
 
             steps.Add(step);
+
+
+            //stepRollback
+            stepRollback = new()
+            {
+                StepName = "Rollback",
+                StepNumber = -1,
+                Logger = loggerController,
+                IsStepEnabled = delegate ()
+                {
+                    return migrationConfig.Rollback.Count > 0 ? true : false;
+                },
+                ExecuteStep = async delegate ()
+                {
+                    foreach (string procedure in migrationConfig.Rollback)
+                    {
+                        await loggerController.LogDebug($"Executando instrução: {procedure}");
+                        await inServiceOracleDataService.RunExecuteNonQueryAsync(procedure);
+                        await Task.Delay(1000);
+                    }
+                }
+            };
 
         }
 
@@ -466,7 +509,7 @@ namespace WorkerGT2IN
             _logger.LogInformation($"Conexão GTech: {_options.Value.GTechConnectionString}");
             _logger.LogInformation($"Conexão Inservice: {_options.Value.InServiceConnectionString}");
             _logger.LogInformation($"Ambiente: {_options.Value.MachineDescription}");
-            _logger.LogInformation($"Versão: 1.2.1");
+            _logger.LogInformation($"Versão: 1.2.2");
 
 
 
@@ -520,8 +563,18 @@ namespace WorkerGT2IN
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo será abortado!");
                                         nextStep = 20;
                                         break;
-                                    case >= 6 and <= 13:
+                                    case >= 6 and <= 8:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo passará para o passo 16!");
+                                        nextStep = 16;
+                                        break;
+                                    case >= 9 and <= 13:
+                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} será realizado o RollBack");
+                                        try
+                                        {
+                                            await stepRollback.RunStepAsync();
+                                            await Task.Delay(4000);
+                                        }
+                                        catch { }
                                         nextStep = 16;
                                         break;
                                     case >= 14 and <= 16:

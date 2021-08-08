@@ -59,7 +59,7 @@ namespace WorkerGT2IN.Services
             return migracaoLiberada;
         }
 
-        public async Task RunCommand(string command)
+        public async Task RunExecuteNonQueryAsync(string command)
         {
             try
             {
@@ -68,6 +68,24 @@ namespace WorkerGT2IN.Services
                 await oracleConnection.OpenAsync();
                 oracleCommand.ExecuteNonQuery();
                 await oracleConnection.CloseAsync();
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+        public async Task<object> RunExecuteScalarAsync(string sql)
+        {
+            object valor = default(object);
+            try
+            {
+                using OracleConnection oracleConnection = new(_oracleConnectionString);
+                using OracleCommand oracleCommand = new(sql, oracleConnection);
+                await oracleConnection.OpenAsync();
+                valor = await oracleCommand.ExecuteScalarAsync();
+                await oracleConnection.CloseAsync();
+                return valor;
             }
             catch
             {

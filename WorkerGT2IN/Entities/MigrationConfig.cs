@@ -57,6 +57,9 @@ namespace WorkerGT2IN.Entities
         public List<string> ProceduresGTech { get; set; } = new List<string>();
 
 
+        public List<string> Rollback { get; set; } = new List<string>();
+
+
         public List<string> Compilar { get; set; } = new List<string>();
 
         public List<string> Indicadores { get; set; } = new List<string>();

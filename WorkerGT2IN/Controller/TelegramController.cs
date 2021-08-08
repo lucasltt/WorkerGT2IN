@@ -49,6 +49,8 @@ namespace WorkerGT2IN.Controller
                 "/DESATIVARDGN" => await CommandDGN(username, chatid, false),
                 "/ATIVARCOPIADGN" => await CommandCopiarDGN(username, chatid, true),
                 "/DESATIVARCOPIADGN" => await CommandCopiarDGN(username, chatid, false),
+                "/ATIVAROMS" => await CommandOMS(username, chatid, true),
+                "/DESATIVAROMS" => await CommandOMS(username, chatid, false),
                 "/INSCREVER" => await CommandInscreverAsync(username, chatid),
                 "/DESINSCREVER" => await CommandDesinscreverAsync(username, chatid),
                 _ => CommandNotFound()
@@ -149,6 +151,28 @@ namespace WorkerGT2IN.Controller
 
 
         }
+
+
+
+
+        private async Task<string> CommandOMS(string username, long chatid, bool ativar)
+        {
+            try
+            {
+                if (UserCanControl(chatid))
+                    await UpdateSingleMigrationConfig(nameof(MigrationConfig.ExecutarOMSMigration), ativar ? "True" : "False");
+                else
+                    return string.Format(noCommandPermission, username);
+            }
+            catch
+            {
+                return $"Olá {username}\nOcorreu um erro com sua solicitação!";
+            }
+            return $"Tudo certo {username}\nA execução da migração OMS foi " + (ativar ? "ativada" : "desativada") + "!";
+
+
+        }
+
 
 
 

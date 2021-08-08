@@ -198,6 +198,9 @@ namespace WorkerGT2IN.Services
                         case { } when parametro.StartsWith("ProcedureGTech"):
                             migrationConfig.ProceduresGTech.Add(oracleDataReader.GetString(1));
                             break;
+                        case { } when parametro.StartsWith("Rollback"):
+                            migrationConfig.Rollback.Add(oracleDataReader.GetString(1));
+                            break;
                         default:
                             break;
 
