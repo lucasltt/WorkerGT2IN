@@ -190,35 +190,11 @@ namespace WorkerGT2IN
             steps.Add(step);
 
 
-            //stepExecutarProceduresInservice
-            step = new()
-            {
-                StepName = "Executar Procedures InService",
-                StepNumber = 6,
-                Logger = loggerController,
-                IsStepEnabled = delegate ()
-                {
-                    return migrationConfig.ProceduresInservice.Count > 0 ? true : false;
-                },
-                ExecuteStep = async delegate ()
-                {
-                    foreach (string procedure in migrationConfig.ProceduresInservice)
-                    {
-                        await loggerController.LogDebug($"Executando instrução: {procedure}");
-                        await inServiceOracleDataService.RunExecuteNonQueryAsync(procedure);
-                        await Task.Delay(1000);
-                    }
-                }
-            };
-
-            steps.Add(step);
-
-
             //ExecutarProceduresGTech
             step = new()
             {
                 StepName = "Executar Procedures GTech",
-                StepNumber = 7,
+                StepNumber = 6,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -230,6 +206,29 @@ namespace WorkerGT2IN
                     {
                         await loggerController.LogDebug($"Executando instrução: {procedure}");
                         await gtechOracleDataService.RunCommand(procedure);
+                        await Task.Delay(1000);
+                    }
+                }
+            };
+
+            steps.Add(step);
+
+            //stepExecutarProceduresInservice
+            step = new()
+            {
+                StepName = "Executar Procedures InService",
+                StepNumber = 7,
+                Logger = loggerController,
+                IsStepEnabled = delegate ()
+                {
+                    return migrationConfig.ProceduresInservice.Count > 0 ? true : false;
+                },
+                ExecuteStep = async delegate ()
+                {
+                    foreach (string procedure in migrationConfig.ProceduresInservice)
+                    {
+                        await loggerController.LogDebug($"Executando instrução: {procedure}");
+                        await inServiceOracleDataService.RunExecuteNonQueryAsync(procedure);
                         await Task.Delay(1000);
                     }
                 }
