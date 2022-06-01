@@ -52,7 +52,7 @@ namespace WorkerGT2IN.Services
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommand = new("select * from g2i_config order by passo, sequencia", oracleConnection);
+                using OracleCommand oracleCommand = new("select parametro, valor, info, passo, sequencia from g2i_config order by passo, sequencia", oracleConnection);
                 await oracleConnection.OpenAsync();
                 OracleDataReader oracleDataReader = oracleCommand.ExecuteReader();
                 string parametro = string.Empty;
@@ -200,6 +200,12 @@ namespace WorkerGT2IN.Services
                             break;
                         case { } when parametro.StartsWith("Rollback"):
                             migrationConfig.Rollback.Add(oracleDataReader.GetString(1));
+                            break;
+                        case { } when parametro.StartsWith("ValidacoesIndicadoresCritica"):
+                            migrationConfig.ValidacoesIndicadoresCritica.Add((oracleDataReader.GetString(1), oracleDataReader.GetString(2)));
+                            break;
+                        case { } when parametro.StartsWith("ValidacoesIndicadoresAvisos"):
+                            migrationConfig.ValidacoesIndicadoresAvisos.Add((oracleDataReader.GetString(1), oracleDataReader.GetString(2)));
                             break;
                         default:
                             break;

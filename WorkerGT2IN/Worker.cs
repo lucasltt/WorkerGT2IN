@@ -333,7 +333,7 @@ namespace WorkerGT2IN
                 },
                 ExecuteStep = async delegate ()
                 {
-                   
+
                     string map = await inServiceOracleDataService.GetCurrentMapAsync();
 
                     string targetPath = map == "A" ? migrationConfig.CaminhoMapBDestino : migrationConfig.CaminhoMapADestino;
@@ -413,6 +413,8 @@ namespace WorkerGT2IN
                         int registrosInvalidos = Convert.ToInt32(await inServiceOracleDataService.RunExecuteScalarAsync("select count(1) from all_objects where status = 'INVALID' and owner = 'INDICADORES' and object_type != 'SYNONYM'"));
                         if (registrosInvalidos > 0) isValid = false;
 
+                        isValid = true;
+
                     }
                     catch
                     {
@@ -458,12 +460,43 @@ namespace WorkerGT2IN
 
             steps.Add(step);
 
+            //stepValidacoesIndicadoresCriticas
+            step = new()
+            {
+                StepName = "Validações Critícas Indicadores",
+                StepNumber = 16,
+                Logger = loggerController,
+                IsStepEnabled = delegate ()
+                {
+                    return migrationConfig.ValidacoesIndicadoresCritica.Count > 0 ? true : false;
+                },
+                ExecuteStep = async delegate ()
+                {
+                    bool errorsFound = false;
+                    foreach ((string procedure, string info) in migrationConfig.ValidacoesIndicadoresCritica)
+                    {
+                        await loggerController.LogDebug($"Executando instrução: {info}");
+                        int valor = Convert.ToInt32(await inServiceOracleDataService.RunExecuteScalarAsync(procedure));
+                        if(valor > 0)
+                        {
+                            errorsFound = true;
+                            await loggerController.LogError($"Validação \"{info}\" falhou retornando {valor} resultados.");
+                        }
+                        await Task.Delay(1000);
+                    }
+
+                    if (errorsFound)
+                        throw new Exception($"Foram identificadas validações que falharam!");
+
+                }
+            };
+            steps.Add(step);
 
             //stepDescongelarFila
             step = new()
             {
                 StepName = "Descongelar Fila de Indicadores",
-                StepNumber = 16,
+                StepNumber = 17,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -497,6 +530,20 @@ namespace WorkerGT2IN
                         await inServiceOracleDataService.RunExecuteNonQueryAsync(procedure);
                         await Task.Delay(1000);
                     }
+
+                    foreach (string servico in migrationConfig.ServicosISM)
+                        try
+                        {
+                            await loggerController.LogDebug($"Iniciado serviço ISM: {servico}");
+
+                            await ismProcessService.ControlServiceAsync(servico, ISMProcessService.ISMServiceAction.Start);
+                        }
+                        catch (Exception ex)
+                        {
+                            await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
+                        }
+
+                    await Task.Delay(1000);
                 }
             };
 
@@ -508,7 +555,7 @@ namespace WorkerGT2IN
             _logger.LogInformation($"Conexão GTech: {_options.Value.GTechConnectionString}");
             _logger.LogInformation($"Conexão Inservice: {_options.Value.InServiceConnectionString}");
             _logger.LogInformation($"Ambiente: {_options.Value.MachineDescription}");
-            _logger.LogInformation($"Versão: 1.2.2");
+            _logger.LogInformation($"Versão: 1.2.5");
 
 
 
@@ -564,7 +611,7 @@ namespace WorkerGT2IN
                                         break;
                                     case >= 6 and <= 8:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo passará para o passo 16!");
-                                        nextStep = 16;
+                                        nextStep = 17;
                                         break;
                                     case >= 9 and <= 13:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} será realizado o RollBack");
@@ -574,9 +621,9 @@ namespace WorkerGT2IN
                                             await Task.Delay(4000);
                                         }
                                         catch { }
-                                        nextStep = 16;
+                                        nextStep = 17;
                                         break;
-                                    case >= 14 and <= 16:
+                                    case >= 14 and <= 17:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo será abortado e exije intervençao manual!");
                                         nextStep = 20;
                                         break;
