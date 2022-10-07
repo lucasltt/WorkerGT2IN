@@ -3,8 +3,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
+using Telegram.Bot.Polling;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using WorkerGT2IN.Entities;
 
 namespace WorkerGT2IN.Controller
@@ -13,7 +18,7 @@ namespace WorkerGT2IN.Controller
     {
         private readonly TelegramBotClient _telegramBotClient;
         private readonly string _oracleConnectionString;
-
+        private CancellationTokenSource cancellationTokenSource;
         private const string noCommandPermission = "Desculpe {0}, você não tem permissão para executar comandos";
 
         public List<TelegramConfig> TelegramSubscriptions { get; set; } = new List<TelegramConfig>();
@@ -21,17 +26,22 @@ namespace WorkerGT2IN.Controller
         public TelegramController(TelegramBotClient telegramBotClient, string oracleConnectionString)
         {
             _telegramBotClient = telegramBotClient;
-            _telegramBotClient.OnMessage += _telegramBotClient_OnMessage;
             _oracleConnectionString = oracleConnectionString;
         }
 
-        private async void _telegramBotClient_OnMessage(object sender, Telegram.Bot.Args.MessageEventArgs e)
+        private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-            string inputMessage = e.Message.Text.ToUpper().Trim();
+
+            if (update.Message is not { } message)
+                return;
+            if (message.Text is not { } messageText)
+                return;
+
+            string inputMessage = messageText.ToUpper().Trim();
 
 
-            string username = e.Message.Chat.FirstName;
-            long chatid = e.Message.Chat.Id;
+            string username = message.Chat.FirstName;
+            long chatid = message.Chat.Id;
             string response = default(string);
             string command = default(string);
 
@@ -53,11 +63,27 @@ namespace WorkerGT2IN.Controller
                 "/DESATIVAROMS" => await CommandOMS(username, chatid, false),
                 "/INSCREVER" => await CommandInscreverAsync(username, chatid),
                 "/DESINSCREVER" => await CommandDesinscreverAsync(username, chatid),
+                "/BLOQUEAROS" => await ComandoBloquearOs(username, chatid),
+                "/DESBLOQUEAROS" => await ComandoDesbloquearOs(username, chatid),
+                "/DESCONECTARUSUARIOS" => await ComandoDesconectarUsuarios(username, chatid),
                 _ => CommandNotFound()
             };
 
             await _telegramBotClient.SendTextMessageAsync(chatid, response);
 
+        }
+
+        Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+        {
+            var ErrorMessage = exception switch
+            {
+                ApiRequestException apiRequestException
+                    => $"Telegram API Error:\n[{apiRequestException.ErrorCode}]\n{apiRequestException.Message}",
+                _ => exception.ToString()
+            };
+
+            Console.WriteLine(ErrorMessage);
+            return Task.CompletedTask;
         }
 
         private bool UserCanControl(long chatid)
@@ -95,8 +121,21 @@ namespace WorkerGT2IN.Controller
                 await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, "🔔" + message);
         }
 
-        public void StartReceiving() =>  _telegramBotClient.StartReceiving();
-        public void StopReceiving() => _telegramBotClient.StopReceiving();
+        public void StartReceiving()
+        {
+
+            cancellationTokenSource = new();
+
+            
+            _telegramBotClient.StartReceiving(
+                updateHandler: HandleUpdateAsync,
+                pollingErrorHandler: HandlePollingErrorAsync,
+                receiverOptions: new ReceiverOptions() { AllowedUpdates = Array.Empty<UpdateType>() },
+                cancellationToken: cancellationTokenSource.Token
+            );
+
+        }
+        public void StopReceiving() => cancellationTokenSource.Cancel();
 
 
         private async Task<string> CommandDesinscreverAsync(string username, long chatid)
@@ -114,6 +153,55 @@ namespace WorkerGT2IN.Controller
             return $"Tudo certo {username}\nAgora você não receberá mais notificações do processo!";
 
         }
+
+        private async Task<string> ComandoDesconectarUsuarios(string username, long chatid)
+        {
+            try
+            {
+                if (UserCanControl(chatid))
+                    await RunCommandAsync("ltt_desconectar_usuarios_gtech");
+                else
+                    return string.Format(noCommandPermission, username);
+            }
+            catch
+            {
+                return $"Olá {username}\nOcorreu um erro com sua solicitação!";
+            }
+            return $"Tudo certo {username}\nUsuarios desconectados!";
+        }
+
+        private async Task<string> ComandoBloquearOs(string username, long chatid)
+        {
+            try
+            {
+                if (UserCanControl(chatid))
+                    await RunCommandAsync("ltt_bloquear_os");
+                else
+                    return string.Format(noCommandPermission, username);
+            }
+            catch
+            {
+                return $"Olá {username}\nOcorreu um erro com sua solicitação!";
+            }
+            return $"Tudo certo {username}\nOSes Bloqueadas!";
+        }
+
+        private async Task<string> ComandoDesbloquearOs(string username, long chatid)
+        {
+            try
+            {
+                if (UserCanControl(chatid))
+                    await RunCommandAsync("ltt_desbloquear_os");
+                else
+                    return string.Format(noCommandPermission, username);
+            }
+            catch
+            {
+                return $"Olá {username}\nOcorreu um erro com sua solicitação!";
+            }
+            return $"Tudo certo {username}\nOSes Desbloqueadas!";
+        }
+
 
         private async Task<string> CommandForcarInicioAsync(string username, long chatid)
         {
@@ -266,7 +354,7 @@ namespace WorkerGT2IN.Controller
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
                 using OracleCommand oracleCommandInsert = new("insert into g2i_telegram(username, chatid, notificationlevel) values(:usr, :cht, :nti)", oracleConnection);
-                using OracleCommand oracleCommandSelect = new("select count(1) from g2i_telegram where chatid = :cht)", oracleConnection);
+                using OracleCommand oracleCommandSelect = new("select count(1) from g2i_telegram where chatid = :cht", oracleConnection);
 
                 oracleCommandInsert.BindByName = true;
                 OracleParameter oracleParameter1 = new("usr", telegramConfig.Username);
@@ -299,7 +387,7 @@ namespace WorkerGT2IN.Controller
                 await oracleConnection.CloseAsync();
                 return true;
             }
-            catch
+            catch(Exception ex)
             {
                 throw;
             }
@@ -345,6 +433,26 @@ namespace WorkerGT2IN.Controller
                 await oracleConnection.OpenAsync();
                 oracleCommand.ExecuteNonQuery();
                 oracleCommand.CommandText = "commit";
+                oracleCommand.ExecuteNonQuery();
+
+                await oracleConnection.CloseAsync();
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+        public async Task RunCommandAsync(string command)
+        {
+            try
+            {
+
+            
+                using OracleConnection oracleConnection = new(_oracleConnectionString);
+                using OracleCommand oracleCommand = new($"declare begin {command}; end;", oracleConnection);
+
+                await oracleConnection.OpenAsync();
                 oracleCommand.ExecuteNonQuery();
 
                 await oracleConnection.CloseAsync();

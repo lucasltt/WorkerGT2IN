@@ -88,6 +88,10 @@ namespace WorkerGT2IN.Entities
 
 
 
+        public bool RenomearLayers { get; set; }
+        public string CaminhoRenomearLayers { get; set; }
+        public string ArgumentoRenomearLayers { get; set; }
+
 
         public bool ExecutarMergeMaps { get; set; }
         public string CaminhoMergeMaps { get; set; }

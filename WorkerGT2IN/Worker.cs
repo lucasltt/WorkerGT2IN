@@ -300,12 +300,30 @@ namespace WorkerGT2IN
 
             steps.Add(step);
 
+            //stepRenameLayers
+            step = new()
+            {
+                StepName = "Renomear Layers .MAP",
+                StepNumber = 10,
+                Logger = loggerController,
+                IsStepEnabled = delegate ()
+                {
+                    return migrationConfig.RenomearLayers;
+                },
+                ExecuteStep = async delegate ()
+                {
+                    runExternalExecutableService = new(migrationConfig.CaminhoRenomearLayers, migrationConfig.ArgumentoRenomearLayers);
+                    await runExternalExecutableService.RunProcessAsync();
+                }
+            };
+
+            steps.Add(step);
 
             //stepUnirArquivoMAP
             step = new()
             {
                 StepName = "Unir Arquivos .MAP",
-                StepNumber = 10,
+                StepNumber = 11,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -325,7 +343,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Copiar Arquivo .MAP",
-                StepNumber = 11,
+                StepNumber = 12,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -352,7 +370,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Deletar Arquivos .NET",
-                StepNumber = 12,
+                StepNumber = 13,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -371,7 +389,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Iniciar Serviços",
-                StepNumber = 13,
+                StepNumber = 14,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -398,7 +416,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Compilar Objetos",
-                StepNumber = 14,
+                StepNumber = 15,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -440,7 +458,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Indicadores",
-                StepNumber = 15,
+                StepNumber = 16,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -464,7 +482,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Validações Critícas Indicadores",
-                StepNumber = 16,
+                StepNumber = 17,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -496,7 +514,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Descongelar Fila de Indicadores",
-                StepNumber = 17,
+                StepNumber = 18,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -555,7 +573,7 @@ namespace WorkerGT2IN
             _logger.LogInformation($"Conexão GTech: {_options.Value.GTechConnectionString}");
             _logger.LogInformation($"Conexão Inservice: {_options.Value.InServiceConnectionString}");
             _logger.LogInformation($"Ambiente: {_options.Value.MachineDescription}");
-            _logger.LogInformation($"Versão: 1.2.5");
+            _logger.LogInformation($"Versão: 1.2.7");
 
 
 
@@ -611,7 +629,7 @@ namespace WorkerGT2IN
                                         break;
                                     case >= 6 and <= 8:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo passará para o passo 16!");
-                                        nextStep = 17;
+                                        nextStep = 18;
                                         break;
                                     case >= 9 and <= 13:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} será realizado o RollBack");
@@ -621,9 +639,9 @@ namespace WorkerGT2IN
                                             await Task.Delay(4000);
                                         }
                                         catch { }
-                                        nextStep = 17;
+                                        nextStep = 18;
                                         break;
-                                    case >= 14 and <= 17:
+                                    case >= 14 and <= 18:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo será abortado e exije intervençao manual!");
                                         nextStep = 20;
                                         break;

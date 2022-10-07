@@ -161,6 +161,16 @@ namespace WorkerGT2IN.Services
                             migrationConfig.ForcarPublicacao = oracleDataReader.GetString(1).Equals("True") ? true : false;
                             break;
 
+                        case nameof(MigrationConfig.RenomearLayers):
+                            migrationConfig.RenomearLayers = oracleDataReader.GetString(1).Equals("True") ? true : false;
+                            break;
+                        case nameof(MigrationConfig.CaminhoRenomearLayers):
+                            migrationConfig.CaminhoRenomearLayers = oracleDataReader.GetString(1);
+                            break;
+                        case nameof(MigrationConfig.ArgumentoRenomearLayers):
+                            migrationConfig.ArgumentoRenomearLayers = oracleDataReader.GetString(1);
+                            break;
+
                         case nameof(MigrationConfig.ExecutarMergeMaps):
                             migrationConfig.ExecutarMergeMaps = oracleDataReader.GetString(1).Equals("True") ? true : false;
                             break;
