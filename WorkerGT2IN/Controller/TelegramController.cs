@@ -18,15 +18,25 @@ namespace WorkerGT2IN.Controller
     {
         private readonly TelegramBotClient _telegramBotClient;
         private readonly string _oracleConnectionString;
+        private readonly AmbienteEnum _ambiente;
+
         private CancellationTokenSource cancellationTokenSource;
         private const string noCommandPermission = "Desculpe {0}, você não tem permissão para executar comandos";
 
+        private string ConfigTable { get; set; }
+
+
         public List<TelegramConfig> TelegramSubscriptions { get; set; } = new List<TelegramConfig>();
 
-        public TelegramController(TelegramBotClient telegramBotClient, string oracleConnectionString)
+        public TelegramController(TelegramBotClient telegramBotClient, string oracleConnectionString, AmbienteEnum ambiente)
         {
             _telegramBotClient = telegramBotClient;
             _oracleConnectionString = oracleConnectionString;
+            _ambiente = ambiente;
+
+
+            if (ambiente == AmbienteEnum.Producao) ConfigTable = "g2i_config";
+            else ConfigTable = "g2i_config_qa";
         }
 
         private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -88,7 +98,7 @@ namespace WorkerGT2IN.Controller
 
         private bool UserCanControl(long chatid)
         {
-            foreach (TelegramConfig telegramConfig in TelegramSubscriptions)
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions.Where(k => k.Ambiente == (int)_ambiente))
                 if (telegramConfig.ChatId == chatid)
                     if (telegramConfig.NotificationLevel == 2) return false;
 
@@ -98,26 +108,26 @@ namespace WorkerGT2IN.Controller
 
         public async Task SendInformationAsync(string message)
         {
-            foreach (TelegramConfig telegramConfig in TelegramSubscriptions)
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions.Where(k => k.Ambiente == (int)_ambiente))
                 await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, message);
         }
 
         public async Task SendErrorAsync(string message)
         {
-            foreach (TelegramConfig telegramConfig in TelegramSubscriptions)
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions.Where(k => k.Ambiente == (int)_ambiente))
                 await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, "❗" + message);
         }
 
         public async Task SendDebugAsync(string message)
         {
-            foreach (TelegramConfig telegramConfig in TelegramSubscriptions.Where(k => k.NotificationLevel == 0))
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions.Where(k => k.NotificationLevel == 0 && k.Ambiente == (int)_ambiente))
                 await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, "⚙️" + message);
         }
 
 
         public async Task SendAlertAsync(string message)
         {
-            foreach (TelegramConfig telegramConfig in TelegramSubscriptions)
+            foreach (TelegramConfig telegramConfig in TelegramSubscriptions.Where(k => k.Ambiente == (int)_ambiente))
                 await _telegramBotClient.SendTextMessageAsync(telegramConfig.ChatId, "🔔" + message);
         }
 
@@ -328,6 +338,7 @@ namespace WorkerGT2IN.Controller
             telegramConfig.Username = username;
             telegramConfig.ChatId = chatid;
             telegramConfig.NotificationLevel = 1;
+            telegramConfig.Ambiente = (int)_ambiente;
 
             try
             {
@@ -353,20 +364,27 @@ namespace WorkerGT2IN.Controller
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommandInsert = new("insert into g2i_telegram(username, chatid, notificationlevel) values(:usr, :cht, :nti)", oracleConnection);
-                using OracleCommand oracleCommandSelect = new("select count(1) from g2i_telegram where chatid = :cht", oracleConnection);
+                using OracleCommand oracleCommandInsert = new("insert into g2i_telegram(username, chatid, notificationlevel, ambiente) values(:usr, :cht, :nti, :amb)", oracleConnection);
+                using OracleCommand oracleCommandSelect = new("select count(1) from g2i_telegram where chatid = :cht and ambiente = :amb", oracleConnection);
 
                 oracleCommandInsert.BindByName = true;
                 OracleParameter oracleParameter1 = new("usr", telegramConfig.Username);
                 OracleParameter oracleParameter2 = new("cht", telegramConfig.ChatId);
                 OracleParameter oracleParameter3 = new("nti", telegramConfig.NotificationLevel);
+                OracleParameter oracleParameter4 = new("amb", telegramConfig.Ambiente);
+
                 oracleCommandInsert.Parameters.Add(oracleParameter1);
                 oracleCommandInsert.Parameters.Add(oracleParameter2);
                 oracleCommandInsert.Parameters.Add(oracleParameter3);
+                oracleCommandInsert.Parameters.Add(oracleParameter4);
 
                 oracleCommandSelect.BindByName = true;
-                OracleParameter oracleParameter4 = new("cht", telegramConfig.ChatId);
-                oracleCommandSelect.Parameters.Add(oracleParameter4);
+                OracleParameter oracleParameter5 = new("cht", telegramConfig.ChatId);
+                OracleParameter oracleParameter6 = new("amb", telegramConfig.Ambiente);
+
+                oracleCommandSelect.Parameters.Add(oracleParameter5);
+                oracleCommandSelect.Parameters.Add(oracleParameter6);
+
 
 
 
@@ -423,7 +441,7 @@ namespace WorkerGT2IN.Controller
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommand = new("update g2i_config set valor = :val where parametro = :par", oracleConnection);
+                using OracleCommand oracleCommand = new($"update {ConfigTable} set valor = :val where parametro = :par", oracleConnection);
                 oracleCommand.BindByName = true;
                 OracleParameter oracleParameter1 = new("par", parameter);
                 OracleParameter oracleParameter2 = new("val", value);
@@ -482,6 +500,7 @@ namespace WorkerGT2IN.Controller
                     telegramConfig.Username = oracleDataReader.GetString(0);
                     telegramConfig.ChatId = Convert.ToInt64(oracleDataReader.GetString(1));
                     telegramConfig.NotificationLevel = Convert.ToInt32(oracleDataReader.GetString(2));
+                    telegramConfig.Ambiente = Convert.ToInt32(oracleDataReader.GetString(3));
 
                     telegramConfigList.Add(telegramConfig);
                 }

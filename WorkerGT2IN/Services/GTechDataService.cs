@@ -11,9 +11,17 @@ namespace WorkerGT2IN.Services
     public class GTechDataService
     {
         private readonly string _oracleConnectionString;
-        public GTechDataService(string oracleConnectionString)
+        private readonly AmbienteEnum _ambiente;
+
+        private string ConfigTable { get; set; }
+
+        public GTechDataService(string oracleConnectionString, AmbienteEnum ambiente)
         {
             _oracleConnectionString = oracleConnectionString;
+            _ambiente = ambiente;
+
+            if (ambiente == AmbienteEnum.Producao) ConfigTable = "g2i_config";
+            else ConfigTable = "g2i_config_qa";
         }
 
 
@@ -22,7 +30,7 @@ namespace WorkerGT2IN.Services
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommand = new("update g2i_config set valor = :val where parametro = :par", oracleConnection);
+                using OracleCommand oracleCommand = new($"update {ConfigTable} set valor = :val where parametro = :par", oracleConnection);
                 oracleCommand.BindByName = true;
                 OracleParameter oracleParameter1 = new("par", parameter);
                 OracleParameter oracleParameter2 = new("val", value);
@@ -36,7 +44,7 @@ namespace WorkerGT2IN.Services
 
                 await oracleConnection.CloseAsync();
             }
-            catch 
+            catch
             {
                 throw;
             }
@@ -44,7 +52,7 @@ namespace WorkerGT2IN.Services
 
 
 
-       
+
         public async Task<MigrationConfig> ReadMigrationConfig()
         {
             MigrationConfig migrationConfig = new MigrationConfig();
@@ -52,7 +60,7 @@ namespace WorkerGT2IN.Services
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommand = new("select parametro, valor, info, passo, sequencia from g2i_config order by passo, sequencia", oracleConnection);
+                using OracleCommand oracleCommand = new($"select parametro, valor, info, passo, sequencia from {ConfigTable} order by passo, sequencia", oracleConnection);
                 await oracleConnection.OpenAsync();
                 OracleDataReader oracleDataReader = oracleCommand.ExecuteReader();
                 string parametro = string.Empty;
@@ -67,7 +75,7 @@ namespace WorkerGT2IN.Services
                         case nameof(MigrationConfig.IniciarServicos):
                             migrationConfig.IniciarServicos = oracleDataReader.GetString(1).Equals("True") ? true : false;
                             break;
-
+                      
                         case nameof(MigrationConfig.PararServicos):
                             migrationConfig.PararServicos = oracleDataReader.GetString(1).Equals("True") ? true : false;
                             break;

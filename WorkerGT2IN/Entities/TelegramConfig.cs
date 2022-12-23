@@ -11,5 +11,7 @@ namespace WorkerGT2IN.Entities
         public string Username { get; set; }
         public long ChatId { get; set; }
         public int NotificationLevel { get; set; }
+
+        public int Ambiente { get; set; }
     }
 }

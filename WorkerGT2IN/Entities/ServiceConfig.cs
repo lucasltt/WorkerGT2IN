@@ -17,6 +17,8 @@ namespace WorkerGT2IN.Entities
 
         public int TempoEspera { get; init; }
 
+        public AmbienteEnum Ambiente { get; init; }
+
 
     }
        

@@ -66,9 +66,9 @@ namespace WorkerGT2IN
             _logger = logger;
             _options = options;
 
-            gtechOracleDataService = new(_options.Value.GTechConnectionString);
+            gtechOracleDataService = new(_options.Value.GTechConnectionString, _options.Value.Ambiente);
             inServiceOracleDataService = new(_options.Value.InServiceConnectionString);
-            telegramController = new(new(_options.Value.TelegramBotKey), _options.Value.GTechConnectionString);
+            telegramController = new(new(_options.Value.TelegramBotKey), _options.Value.GTechConnectionString, _options.Value.Ambiente);
             loggerController = new(_logger, telegramController);
 
 
@@ -573,7 +573,7 @@ namespace WorkerGT2IN
             _logger.LogInformation($"Conexão GTech: {_options.Value.GTechConnectionString}");
             _logger.LogInformation($"Conexão Inservice: {_options.Value.InServiceConnectionString}");
             _logger.LogInformation($"Ambiente: {_options.Value.MachineDescription}");
-            _logger.LogInformation($"Versão: 1.2.7");
+            _logger.LogInformation($"Versão: 1.2.9");
 
 
 
@@ -599,7 +599,7 @@ namespace WorkerGT2IN
                 TimeSpan horaAgendada = TimeSpan.Parse(migrationConfig.HoraAgendamentoDiario);
                 if (DateTime.Now.TimeOfDay < horaAgendada)
                     await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicouHoje), "False");
-               
+
 
                 if ((migrationConfig.PublicouHoje == false && DateTime.Now.TimeOfDay >= horaAgendada && migrationConfig.AtivarAgendamento) || migrationConfig.ForcarPublicacao)
                 {
