@@ -42,27 +42,30 @@ namespace WorkerGT2IN.Steps
             stopWatch = new Stopwatch();
             stopWatch.Start();
 
-            await Logger.LogInformation($"Início do Passo {StepNumber}:\n{StepName}");
+            Logger.Passo = StepNumber;
+            await Logger.LogInformation($"Início do Passo {StepNumber} - {StepName}");
             try
             {
                 if (IsStepEnabled())
                 {
+                    await Logger.LogPasso(StepName, StatusPassoEnum.Executando);
                     await PreFlight();
                     await ExecuteStep();
                 }
                 else
                 {
-                    await Logger.LogInformation($"Passo {StepNumber}: Desativado");
+                    await Logger.LogInformation($"Passo {StepNumber} Desativado");
+                    await Logger.LogPasso(StepName, StatusPassoEnum.Desativado);
                 }
 
             }
             catch(Exception ex)
             {
-                await Logger.LogError($"Erro Fatal no Passo {StepNumber}:\n{ex.Message}");
+                await Logger.LogError($"Erro Fatal no Passo {StepNumber}: {ex.Message}");
 
                 stopWatch.Stop();
-                await Logger.LogInformation($"Término do Passo {StepNumber}:\n{StepName}\nDuração do Passo: {stopWatch.Elapsed}");
-
+                await Logger.LogInformation($"Término do Passo {StepNumber} - Duração: {stopWatch.Elapsed}");
+                await Logger.LogPasso(StepName, StatusPassoEnum.Abortado);
 
                 throw new StepBaseExecutionException(ex.Message);
             }
@@ -88,8 +91,9 @@ namespace WorkerGT2IN.Steps
             }
 
             stopWatch.Stop();
-            await Logger.LogInformation($"Término do Passo {StepNumber}:\n{StepName}\nDuração do Passo: {stopWatch.Elapsed}");
-
+            await Logger.LogInformation($"Término do Passo {StepNumber} - Duração: {stopWatch.Elapsed}");
+            await Logger.LogPasso(StepName, StatusPassoEnum.Finalizado);
+            
             if(stepResult == false)
                 throw new StepBaseValidationException();
 

@@ -1,7 +1,9 @@
 ﻿using Oracle.ManagedDataAccess.Client;
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Threading.Tasks;
 using WorkerGT2IN.Entities;
@@ -13,15 +15,15 @@ namespace WorkerGT2IN.Services
         private readonly string _oracleConnectionString;
         private readonly AmbienteEnum _ambiente;
 
-        private string ConfigTable { get; set; }
+        private string Suffix { get; set; }
 
         public GTechDataService(string oracleConnectionString, AmbienteEnum ambiente)
         {
             _oracleConnectionString = oracleConnectionString;
             _ambiente = ambiente;
 
-            if (ambiente == AmbienteEnum.Producao) ConfigTable = "g2i_config";
-            else ConfigTable = "g2i_config_qa";
+            if (ambiente == AmbienteEnum.Producao) Suffix = string.Empty;
+            else Suffix = "_qa";
         }
 
 
@@ -30,7 +32,7 @@ namespace WorkerGT2IN.Services
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommand = new($"update {ConfigTable} set valor = :val where parametro = :par", oracleConnection);
+                using OracleCommand oracleCommand = new($"update g2i_config{Suffix} set valor = :val where parametro = :par", oracleConnection);
                 oracleCommand.BindByName = true;
                 OracleParameter oracleParameter1 = new("par", parameter);
                 OracleParameter oracleParameter2 = new("val", value);
@@ -60,7 +62,7 @@ namespace WorkerGT2IN.Services
             try
             {
                 using OracleConnection oracleConnection = new(_oracleConnectionString);
-                using OracleCommand oracleCommand = new($"select parametro, valor, info, passo, sequencia from {ConfigTable} order by passo, sequencia", oracleConnection);
+                using OracleCommand oracleCommand = new($"select parametro, valor, info, passo, sequencia from g2i_config{Suffix} order by passo, sequencia", oracleConnection);
                 await oracleConnection.OpenAsync();
                 OracleDataReader oracleDataReader = oracleCommand.ExecuteReader();
                 string parametro = string.Empty;
@@ -142,13 +144,9 @@ namespace WorkerGT2IN.Services
                         case nameof(MigrationConfig.CaminhoISMRequest):
                             migrationConfig.CaminhoISMRequest = oracleDataReader.GetString(1);
                             break;
-                        case nameof(MigrationConfig.DeletarArquivoNET):
-                            migrationConfig.DeletarArquivoNET = oracleDataReader.GetString(1).Equals("True") ? true : false;
+                        case nameof(MigrationConfig.MapChangerPath):
+                            migrationConfig.MapChangerPath = oracleDataReader.GetString(1);
                             break;
-                        case nameof(MigrationConfig.CaminhoArquivoNET):
-                            migrationConfig.CaminhoArquivoNET = oracleDataReader.GetString(1);
-                            break;
-
                         case nameof(MigrationConfig.ExecutarDescongelarFila):
                             migrationConfig.ExecutarDescongelarFila = oracleDataReader.GetString(1).Equals("True") ? true : false;
                             break;
@@ -167,6 +165,9 @@ namespace WorkerGT2IN.Services
                             break;
                         case nameof(MigrationConfig.ForcarPublicacao):
                             migrationConfig.ForcarPublicacao = oracleDataReader.GetString(1).Equals("True") ? true : false;
+                            break;
+                        case nameof(MigrationConfig.ForcarCopiaMapa):
+                            migrationConfig.ForcarCopiaMapa = oracleDataReader.GetString(1).Equals("True") ? true : false;
                             break;
 
                         case nameof(MigrationConfig.RenomearLayers):
@@ -216,6 +217,9 @@ namespace WorkerGT2IN.Services
                         case { } when parametro.StartsWith("ProcedureGTech"):
                             migrationConfig.ProceduresGTech.Add(oracleDataReader.GetString(1));
                             break;
+                        case { } when parametro.StartsWith("ValidacoesGTech"):
+                            migrationConfig.ValidacoesGTech.Add(oracleDataReader.GetString(1));
+                            break;
                         case { } when parametro.StartsWith("Rollback"):
                             migrationConfig.Rollback.Add(oracleDataReader.GetString(1));
                             break;
@@ -257,5 +261,127 @@ namespace WorkerGT2IN.Services
                 throw;
             }
         }
+
+        public async Task<int> GenerateNextGroupIdAsync()
+        {
+            try
+            {
+                using OracleConnection oracleConnection = new(_oracleConnectionString);
+                using OracleCommand oracleCommand = new($"select nvl(max(idgrupo), 0) + 1 from hxgn_migra_passos{Suffix}", oracleConnection);
+                await oracleConnection.OpenAsync();
+                int result = Convert.ToInt32(await oracleCommand.ExecuteScalarAsync());
+                await oracleConnection.CloseAsync();
+
+                return result;
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+        public async Task<int> GetActualGroupIdAsync()
+        {
+            try
+            {
+                using OracleConnection oracleConnection = new(_oracleConnectionString);
+                using OracleCommand oracleCommand = new($"select nvl(max(idgrupo), 0) from hxgn_migra_passos{Suffix}", oracleConnection);
+                await oracleConnection.OpenAsync();
+                int result = Convert.ToInt32(await oracleCommand.ExecuteScalarAsync());
+                await oracleConnection.CloseAsync();
+
+                return result;
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+
+        public async Task InsertLogAsync(int grupo, int passo, string mensagem, TipoLogEnum tipo)
+        {
+            try
+            {
+                using OracleConnection oracleConnection = new(_oracleConnectionString);
+                using OracleCommand oracleCommand = new($"insert into hxgn_migra_log{Suffix}(idlog, idgrupo, passo, mensagem, tipo, data) " +
+                    $"values(hxgn_migra_log_seq.nextval, :gru, :pas, :msg, :tip, sysdate)", oracleConnection);
+                oracleCommand.BindByName = true;
+                OracleParameter oracleParameter1 = new("gru", grupo);
+                OracleParameter oracleParameter2 = new("pas", passo);
+                OracleParameter oracleParameter3 = new("msg", mensagem);
+                OracleParameter oracleParameter4 = new("tip", tipo.ToString());
+                oracleCommand.Parameters.Add(oracleParameter1);
+                oracleCommand.Parameters.Add(oracleParameter2);
+                oracleCommand.Parameters.Add(oracleParameter3);
+                oracleCommand.Parameters.Add(oracleParameter4);
+
+                await oracleConnection.OpenAsync();
+                oracleCommand.ExecuteNonQuery();
+                oracleCommand.CommandText = "commit";
+                oracleCommand.ExecuteNonQuery();
+
+                await oracleConnection.CloseAsync();
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+
+        public async Task InsertPassoAsync(int grupo, int passo, string mensagem, Enum status)
+        {
+            try
+            {
+                using OracleConnection oracleConnection = new(_oracleConnectionString);
+                using OracleCommand oracleCommand = new($"insert into hxgn_migra_passos{Suffix}(idpasso, idgrupo, passo, mensagem, status, data) " +
+                    $"values(hxgn_migra_log_seq.nextval, :gru, :pas, :msg, :sta, sysdate)", oracleConnection);
+                oracleCommand.BindByName = true;
+                OracleParameter oracleParameter1 = new("gru", grupo);
+                OracleParameter oracleParameter2 = new("pas", passo);
+                OracleParameter oracleParameter3 = new("msg", mensagem);
+                OracleParameter oracleParameter4 = new("sta", status.ToString());
+                oracleCommand.Parameters.Add(oracleParameter1);
+                oracleCommand.Parameters.Add(oracleParameter2);
+                oracleCommand.Parameters.Add(oracleParameter3);
+                oracleCommand.Parameters.Add(oracleParameter4);
+
+                await oracleConnection.OpenAsync();
+                oracleCommand.ExecuteNonQuery();
+                oracleCommand.CommandText = "commit";
+                oracleCommand.ExecuteNonQuery();
+
+                await oracleConnection.CloseAsync();
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+
+        public async Task<object> RunExecuteScalarAsync(string sql)
+        {
+            object valor = default(object);
+            try
+            {
+                using OracleConnection oracleConnection = new(_oracleConnectionString);
+                using OracleCommand oracleCommand = new(sql, oracleConnection);
+                await oracleConnection.OpenAsync();
+                valor = await oracleCommand.ExecuteScalarAsync();
+                await oracleConnection.CloseAsync();
+                return valor;
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+
+
+
+
     }
 }

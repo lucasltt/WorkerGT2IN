@@ -5,6 +5,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Telegram.Bot;
+using WorkerGT2IN.Entities;
+using WorkerGT2IN.Services;
 
 namespace WorkerGT2IN.Controller
 {
@@ -12,39 +14,57 @@ namespace WorkerGT2IN.Controller
     {
 
         private readonly ILogger<Worker> _logger;
-        private readonly TelegramController _telegramController;
+        private readonly GTechDataService _gtechDataService;
+        public int Grupo { get; set; } = default;
+        public int Passo { get; set; } = default;
 
-        public LoggerController(ILogger<Worker> logger, TelegramController telegramController)
+        public LoggerController(ILogger<Worker> logger, GTechDataService gtechDataService)
         {
             _logger = logger;
-            _telegramController = telegramController;
+            _gtechDataService = gtechDataService;
         }
+
+
 
 
         public async Task LogInformation(string message)
         {
             _logger.LogInformation(message);
-            await _telegramController.SendInformationAsync(message);
+            await _gtechDataService?.InsertLogAsync(Grupo, Passo, message, Entities.TipoLogEnum.Informacao);
+
         }
 
         public async Task LogError(string message)
         {
             _logger.LogError(message);
-            await _telegramController.SendErrorAsync(message);
+            await _gtechDataService?.InsertLogAsync(Grupo, Passo, message, Entities.TipoLogEnum.Erro);
+
+
         }
 
 
         public async Task LogDebug(string message)
         {
             _logger.LogDebug(message);
-            await _telegramController.SendDebugAsync(message);
+            await _gtechDataService?.InsertLogAsync(Grupo, Passo, message, Entities.TipoLogEnum.Debug);
         }
 
 
         public async Task LogAlert(string message)
         {
             _logger.LogWarning(message);
-            await _telegramController.SendAlertAsync(message);
+            await _gtechDataService?.InsertLogAsync(Grupo, Passo, message, Entities.TipoLogEnum.Alerta);
+
+        }
+
+        public async Task LogPasso(string message, StatusPassoEnum status)
+        {
+            await _gtechDataService?.InsertPassoAsync(Grupo, Passo, message, status);
+        }
+
+        public async Task LogFinalMigracao(string message, StatusMigracaoEnum status)
+        {
+            await _gtechDataService?.InsertPassoAsync(Grupo, 95, message, status);
         }
 
     }

@@ -23,9 +23,11 @@ namespace WorkerGT2IN
         private readonly ILogger<Worker> _logger;
         private readonly IOptions<ServiceConfig> _options;
 
+        private readonly string Version = "1.5.0";
+
         private Stopwatch stopWatch;
 
-        private TelegramController telegramController;
+       // private TelegramController telegramController;
         private LoggerController loggerController;
 
         private MigrationConfig migrationConfig;
@@ -38,27 +40,10 @@ namespace WorkerGT2IN
         private ISMProcessService ismProcessService;
         private CheckErrorOnFileService checkErrorOnFileService;
 
-        //private StepBase stepPublicarMetadados;
-        //private StepBase stepPublicarDados;
-        //private StepBase stepPublicarDGN;
-        //private StepBase stepCopiarDGN;
-        //private StepBase stepCongelarFila;
-        //private StepBase stepExecutarProceduresInservice;
-        //private StepBase stepExecutarProceduresGTech;
-        //private StepBase stepMigracaoOMS;
-        //private StepBase stepPararServicos;
-        //private StepBase stepDeletarArquivoNET;
-        //private StepBase stepUnirArquivoMAP;
-        //private StepBase stepCopiarArquivoMAP;
-        //private StepBase stepIniciarServicos;
-        //private StepBase stepCompilarObjetos;
-        //private StepBase stepIndicadores;
-        //private StepBase stepDescongelarFila;
+        private StepBase stepRollback;
+        private StepBase stepCopiarMapa;
 
-        StepBase stepRollback;
-
-
-        List<StepBase> steps = new List<StepBase>();
+        private List<StepBase> steps = new List<StepBase>();
 
 
         public Worker(ILogger<Worker> logger, IOptions<ServiceConfig> options)
@@ -68,18 +53,61 @@ namespace WorkerGT2IN
 
             gtechOracleDataService = new(_options.Value.GTechConnectionString, _options.Value.Ambiente);
             inServiceOracleDataService = new(_options.Value.InServiceConnectionString);
-            telegramController = new(new(_options.Value.TelegramBotKey), _options.Value.GTechConnectionString, _options.Value.Ambiente);
-            loggerController = new(_logger, telegramController);
+            loggerController = new(_logger, gtechOracleDataService);
 
 
 
             StepBase step;
 
+
+            step = new()
+            {
+                StepName = "Validações Dados",
+                StepNumber = 1,
+                Logger = loggerController,
+                IsStepEnabled = delegate ()
+                {
+                    return migrationConfig.ValidacoesGTech.Count > 0 ? true : false;
+                },
+                ExecuteStep = async delegate ()
+                {
+                    bool errorsFound = false;
+                    foreach (string procedure in migrationConfig.ValidacoesGTech)
+                    {
+                        await loggerController.LogDebug($"Executando instrução: {procedure}");
+                        await gtechOracleDataService.RunCommand(procedure);
+                        await Task.Delay(1000);
+                    }
+
+                    if (errorsFound)
+                        throw new Exception($"Foram identificadas validações que falharam!");
+
+                },
+                ValidateResults = async delegate ()
+                {
+                    bool isValid = true;
+
+                    try
+                    {
+                        int registrosInvalidos = Convert.ToInt32(await gtechOracleDataService.RunExecuteScalarAsync("select count(1) from g2i_migra_rel_erros where prioridade = 1"));
+                        if (registrosInvalidos > 0) isValid = false;
+
+
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                    return isValid;
+                },
+            };
+            steps.Add(step);
+
             //stepPublicarMetadados
             step = new()
             {
                 StepName = "Publicação de metadados",
-                StepNumber = 1,
+                StepNumber = 2,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -99,7 +127,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Publicação de dados",
-                StepNumber = 2,
+                StepNumber = 3,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -120,7 +148,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Publicação de DGN",
-                StepNumber = 3,
+                StepNumber = 4,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -152,7 +180,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Cópia de DGN",
-                StepNumber = 4,
+                StepNumber = 5,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -171,7 +199,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Congelar Fila de Indicadores",
-                StepNumber = 5,
+                StepNumber = 6,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -194,7 +222,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Executar Procedures GTech",
-                StepNumber = 6,
+                StepNumber = 7,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -217,7 +245,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Executar Procedures InService",
-                StepNumber = 7,
+                StepNumber = 8,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -241,7 +269,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Migração OMS",
-                StepNumber = 8,
+                StepNumber = 9,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -273,32 +301,32 @@ namespace WorkerGT2IN
 
             steps.Add(step);
 
-            //stepPararServicos
-            step = new()
-            {
-                StepName = "Parar Serviços",
-                StepNumber = 9,
-                Logger = loggerController,
-                IsStepEnabled = delegate ()
-                {
-                    return migrationConfig.ServicosISM.Count > 0 && migrationConfig.PararServicos ? true : false;
-                },
-                ExecuteStep = async delegate ()
-                {
-                    ismProcessService = new(migrationConfig.CaminhoISMRequest);
-                    foreach (string servico in migrationConfig.ServicosISM)
-                        try
-                        {
-                            await ismProcessService.ControlServiceAsync(servico, ISMProcessService.ISMServiceAction.Stop);
-                        }
-                        catch (Exception ex)
-                        {
-                            await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
-                        }
-                }
-            };
+            ////stepPararServicos
+            //step = new()
+            //{
+            //    StepName = "Parar Serviços",
+            //    StepNumber = 9,
+            //    Logger = loggerController,
+            //    IsStepEnabled = delegate ()
+            //    {
+            //        return migrationConfig.ServicosISM.Count > 0 && migrationConfig.PararServicos ? true : false;
+            //    },
+            //    ExecuteStep = async delegate ()
+            //    {
+            //        ismProcessService = new(migrationConfig.CaminhoISMRequest);
+            //        foreach (string servico in migrationConfig.ServicosISM)
+            //            try
+            //            {
+            //                await ismProcessService.ControlServiceAsync(servico, ISMProcessService.ISMServiceAction.Stop);
+            //            }
+            //            catch (Exception ex)
+            //            {
+            //                await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
+            //            }
+            //    }
+            //};
 
-            steps.Add(step);
+            //steps.Add(step);
 
             //stepRenameLayers
             step = new()
@@ -339,84 +367,84 @@ namespace WorkerGT2IN
 
             steps.Add(step);
 
-            //stepCopiarArquivoMAP
-            step = new()
-            {
-                StepName = "Copiar Arquivo .MAP",
-                StepNumber = 12,
-                Logger = loggerController,
-                IsStepEnabled = delegate ()
-                {
-                    return migrationConfig.CopiarArquivoMAP;
-                },
-                ExecuteStep = async delegate ()
-                {
+            ////stepCopiarArquivoMAP
+            //step = new()
+            //{
+            //    StepName = "Copiar Arquivo .MAP",
+            //    StepNumber = 12,
+            //    Logger = loggerController,
+            //    IsStepEnabled = delegate ()
+            //    {
+            //        return migrationConfig.CopiarArquivoMAP;
+            //    },
+            //    ExecuteStep = async delegate ()
+            //    {
 
-                    string map = await inServiceOracleDataService.GetCurrentMapAsync();
+            //        string map = await inServiceOracleDataService.GetCurrentMapAsync();
 
-                    string targetPath = map == "A" ? migrationConfig.CaminhoMapBDestino : migrationConfig.CaminhoMapADestino;
-                    await loggerController.LogDebug($"Mapa Atual: {map}\nDestino: {targetPath}");
-                    copyFileService = new(migrationConfig.CaminhoMapOrigem, targetPath);
-                    await copyFileService.CopyAsync();
+            //        string targetPath = map == "A" ? migrationConfig.CaminhoMapBDestino : migrationConfig.CaminhoMapADestino;
+            //        await loggerController.LogDebug($"Mapa Atual: {map}\nDestino: {targetPath}");
+            //        copyFileService = new(migrationConfig.CaminhoMapOrigem, targetPath);
+            //        await copyFileService.CopyAsync();
 
-                    await inServiceOracleDataService.UpdateMapAsync();
-                }
-            };
+            //        await inServiceOracleDataService.UpdateMapAsync();
+            //    }
+            //};
 
-            steps.Add(step);
-
-
-            //stepDeletarArquivoNET
-            step = new()
-            {
-                StepName = "Deletar Arquivos .NET",
-                StepNumber = 13,
-                Logger = loggerController,
-                IsStepEnabled = delegate ()
-                {
-                    return migrationConfig.DeletarArquivoNET;
-                },
-                ExecuteStep = async delegate ()
-                {
-                    deleteFileService = new(migrationConfig.CaminhoArquivoNET, "*.net");
-                    await deleteFileService.DeleteAsync();
-                }
-            };
-
-            steps.Add(step);
-
-            //stepIniciarServicos
-            step = new()
-            {
-                StepName = "Iniciar Serviços",
-                StepNumber = 14,
-                Logger = loggerController,
-                IsStepEnabled = delegate ()
-                {
-                    return migrationConfig.ServicosISM.Count > 0 && migrationConfig.IniciarServicos ? true : false;
-                },
-                ExecuteStep = async delegate ()
-                {
-                    foreach (string servico in migrationConfig.ServicosISM)
-                        try
-                        {
-                            await ismProcessService.ControlServiceAsync(servico, ISMProcessService.ISMServiceAction.Start);
-                        }
-                        catch (Exception ex)
-                        {
-                            await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
-                        }
-                }
-            };
+            //steps.Add(step);
 
 
-            steps.Add(step);
+            ////stepDeletarArquivoNET
+            //step = new()
+            //{
+            //    StepName = "Deletar Arquivos .NET",
+            //    StepNumber = 13,
+            //    Logger = loggerController,
+            //    IsStepEnabled = delegate ()
+            //    {
+            //        return migrationConfig.DeletarArquivoNET;
+            //    },
+            //    ExecuteStep = async delegate ()
+            //    {
+            //        deleteFileService = new(migrationConfig.CaminhoArquivoNET, "*.net");
+            //        await deleteFileService.DeleteAsync();
+            //    }
+            //};
+
+            //steps.Add(step);
+
+            ////stepIniciarServicos
+            //step = new()
+            //{
+            //    StepName = "Iniciar Serviços",
+            //    StepNumber = 14,
+            //    Logger = loggerController,
+            //    IsStepEnabled = delegate ()
+            //    {
+            //        return migrationConfig.ServicosISM.Count > 0 && migrationConfig.IniciarServicos ? true : false;
+            //    },
+            //    ExecuteStep = async delegate ()
+            //    {
+            //        foreach (string servico in migrationConfig.ServicosISM)
+            //            try
+            //            {
+            //                await ismProcessService.ControlServiceAsync(servico, ISMProcessService.ISMServiceAction.Start);
+            //            }
+            //            catch (Exception ex)
+            //            {
+            //                await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
+            //            }
+            //    }
+            //};
+
+
+            //steps.Add(step);
 
             //stepCompilarObjetos
             step = new()
             {
                 StepName = "Compilar Objetos",
-                StepNumber = 15,
+                StepNumber = 12,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -458,7 +486,7 @@ namespace WorkerGT2IN
             step = new()
             {
                 StepName = "Indicadores",
-                StepNumber = 16,
+                StepNumber = 13,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -479,42 +507,42 @@ namespace WorkerGT2IN
             steps.Add(step);
 
             //stepValidacoesIndicadoresCriticas
-            step = new()
-            {
-                StepName = "Validações Critícas Indicadores",
-                StepNumber = 17,
-                Logger = loggerController,
-                IsStepEnabled = delegate ()
-                {
-                    return migrationConfig.ValidacoesIndicadoresCritica.Count > 0 ? true : false;
-                },
-                ExecuteStep = async delegate ()
-                {
-                    bool errorsFound = false;
-                    foreach ((string procedure, string info) in migrationConfig.ValidacoesIndicadoresCritica)
-                    {
-                        await loggerController.LogDebug($"Executando instrução: {info}");
-                        int valor = Convert.ToInt32(await inServiceOracleDataService.RunExecuteScalarAsync(procedure));
-                        if(valor > 0)
-                        {
-                            errorsFound = true;
-                            await loggerController.LogError($"Validação \"{info}\" falhou retornando {valor} resultados.");
-                        }
-                        await Task.Delay(1000);
-                    }
+            //step = new()
+            //{
+            //    StepName = "Validações Critícas Indicadores",
+            //    StepNumber = 13,
+            //    Logger = loggerController,
+            //    IsStepEnabled = delegate ()
+            //    {
+            //        return migrationConfig.ValidacoesIndicadoresCritica.Count > 0 ? true : false;
+            //    },
+            //    ExecuteStep = async delegate ()
+            //    {
+            //        bool errorsFound = false;
+            //        foreach ((string procedure, string info) in migrationConfig.ValidacoesIndicadoresCritica)
+            //        {
+            //            await loggerController.LogDebug($"Executando instrução: {info}");
+            //            int valor = Convert.ToInt32(await inServiceOracleDataService.RunExecuteScalarAsync(procedure));
+            //            if(valor > 0)
+            //            {
+            //                errorsFound = true;
+            //                await loggerController.LogError($"Validação \"{info}\" falhou retornando {valor} resultados.");
+            //            }
+            //            await Task.Delay(1000);
+            //        }
 
-                    if (errorsFound)
-                        throw new Exception($"Foram identificadas validações que falharam!");
+            //        if (errorsFound)
+            //            throw new Exception($"Foram identificadas validações que falharam!");
 
-                }
-            };
-            steps.Add(step);
+            //    }
+            //};
+            //steps.Add(step);
 
             //stepDescongelarFila
             step = new()
             {
                 StepName = "Descongelar Fila de Indicadores",
-                StepNumber = 18,
+                StepNumber = 14,
                 Logger = loggerController,
                 IsStepEnabled = delegate ()
                 {
@@ -549,42 +577,53 @@ namespace WorkerGT2IN
                         await Task.Delay(1000);
                     }
 
-                    foreach (string servico in migrationConfig.ServicosISM)
-                        try
-                        {
-                            await loggerController.LogDebug($"Iniciado serviço ISM: {servico}");
-
-                            await ismProcessService.ControlServiceAsync(servico, ISMProcessService.ISMServiceAction.Start);
-                        }
-                        catch (Exception ex)
-                        {
-                            await loggerController.LogError($"[{DateTime.Now}] Erro: {ex.Message}");
-                        }
+                 
 
                     await Task.Delay(1000);
                 }
             };
 
+
+            //stepCopiarMapa
+            stepCopiarMapa = new()
+            {
+                StepName = "Copiar Mapa Inservice",
+                StepNumber = 99,
+                Logger = loggerController,
+                IsStepEnabled = delegate ()
+                {
+                    return true;
+                },
+                ExecuteStep = async delegate ()
+                {
+                    runExternalExecutableService = new(migrationConfig.MapChangerPath, string.Empty);
+                    int exitCode = await runExternalExecutableService.RunProcessAsync();
+                    await loggerController.LogDebug($"Resultado do MapChanger: {exitCode}");
+                    if(exitCode != 0 && exitCode != -31)
+                        throw new Exception($"Falha no copia do mapa!");
+
+
+                }
+            };
+
+
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Executando o serviço de migração G/Technology para Inservice");
-            _logger.LogInformation($"Conexão GTech: {_options.Value.GTechConnectionString}");
-            _logger.LogInformation($"Conexão Inservice: {_options.Value.InServiceConnectionString}");
-            _logger.LogInformation($"Ambiente: {_options.Value.MachineDescription}");
-            _logger.LogInformation($"Versão: 1.2.9");
+            DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-
-
-            telegramController.StartReceiving();
+            await loggerController.LogInformation("Executando o serviço de migração G/Technology para Inservice");
+            await loggerController.LogInformation($"Conexão GTech: {_options.Value.GTechConnectionString}");
+            await loggerController.LogInformation($"Conexão Inservice: {_options.Value.InServiceConnectionString}");
+            await loggerController.LogInformation($"Ambiente: {_options.Value.MachineDescription}");
+            await loggerController.LogInformation($"Versão: {Version}");
+            
 
 
             while (!stoppingToken.IsCancellationRequested)
             {
-               // _logger.LogInformation("Executando ciclo às: {time}", DateTimeOffset.Now);
 
-                telegramController.TelegramSubscriptions = await telegramController.ReadTelegramConfigAsync();
 
                 try
                 {
@@ -595,20 +634,48 @@ namespace WorkerGT2IN
                     await loggerController.LogError(ex.Message);
                 }
 
-                
-                TimeSpan horaAgendada = TimeSpan.Parse(migrationConfig.HoraAgendamentoDiario);
-                if (DateTime.Now.TimeOfDay < horaAgendada)
-                    await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicouHoje), "False");
+                await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.LastEpoch), (DateTime.Now - epoch).TotalSeconds.ToString());
+                await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.VersaoServidor), Version);
 
-
-                if ((migrationConfig.PublicouHoje == false && DateTime.Now.TimeOfDay >= horaAgendada && migrationConfig.AtivarAgendamento) || migrationConfig.ForcarPublicacao)
+                if (migrationConfig.ForcarCopiaMapa)
                 {
                     stopWatch = new Stopwatch();
                     stopWatch.Start();
 
-                    await loggerController.LogInformation($"▶️Executando ciclo às: {DateTime.Now} no ambiente: {_options.Value.MachineDescription}");
+                    loggerController.Grupo = await gtechOracleDataService.GetActualGroupIdAsync();
+
+                    await loggerController.LogInformation($"Copiando mapa as {DateTime.Now} no ambiente: {_options.Value.MachineDescription}");
+
+                    try
+                    {
+                        await stepCopiarMapa.RunStepAsync();
+                    }
+                    catch (Exception ex) 
+                    {
+                    }
+                    await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.ForcarCopiaMapa), "False");
+
+                    stopWatch.Stop();
+
+                    await loggerController.LogInformation($"Término da copia do mapa às: {DateTime.Now} com ruração total: {stopWatch.Elapsed}");
+
+                }
+
+
+
+                if (migrationConfig.ForcarPublicacao)
+                { 
+                    stopWatch = new Stopwatch();
+                    stopWatch.Start();
+
+                    await loggerController.LogInformation($"Executando ciclo às: {DateTime.Now} no ambiente: {_options.Value.MachineDescription}");
 
                     int nextStep = 1;
+
+                    int grupo = await gtechOracleDataService.GenerateNextGroupIdAsync();
+                    loggerController.Grupo = grupo;
+
+                    StatusMigracaoEnum statusMigracao = StatusMigracaoEnum.Finalizada;
                     foreach (StepBase step in steps)
                     {
                         if (step.StepNumber == nextStep)
@@ -621,17 +688,20 @@ namespace WorkerGT2IN
                             }
                             catch
                             {
-                                switch(step.StepNumber)
+                                switch (step.StepNumber)
                                 {
                                     case <= 5:
-                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo será abortado!");
+                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo será Cancelado!");
+                                        statusMigracao = StatusMigracaoEnum.Cancelada;
                                         nextStep = 20;
                                         break;
                                     case >= 6 and <= 8:
-                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo passará para o passo 16!");
-                                        nextStep = 18;
+                                        await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo passará para o passo 14!");
+                                        statusMigracao = StatusMigracaoEnum.Cancelada;
+                                        //descongela
+                                        nextStep = 14;
                                         break;
-                                    case >= 9 and <= 13:
+                                    case >= 9 and <= 12:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} será realizado o RollBack");
                                         try
                                         {
@@ -639,10 +709,14 @@ namespace WorkerGT2IN
                                             await Task.Delay(4000);
                                         }
                                         catch { }
-                                        nextStep = 18;
+                                        statusMigracao = StatusMigracaoEnum.Anulada;
+
+                                        //descongela
+                                        nextStep = 14;
                                         break;
-                                    case >= 14 and <= 18:
+                                    case >= 13 and <= 14:
                                         await loggerController.LogAlert($"Como o ocorreu um erro no passo {step.StepNumber} o processo será abortado e exije intervençao manual!");
+                                        statusMigracao = StatusMigracaoEnum.Abortada;
                                         nextStep = 20;
                                         break;
 
@@ -651,22 +725,23 @@ namespace WorkerGT2IN
 
                             }
 
-                           
+
                         }
                     }
 
+                    await loggerController.LogFinalMigracao("Migração encerrada", statusMigracao);
                     await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.ForcarPublicacao), "False");
                     await gtechOracleDataService.UpdateSingleMigrationConfig(nameof(MigrationConfig.PublicouHoje), "True");
 
                     stopWatch.Stop();
 
-                    await loggerController.LogInformation($"🏁Término do ciclo às: {DateTime.Now} no ambiente: {_options.Value.MachineDescription}\nDuração total: {stopWatch.Elapsed}");
+                    await loggerController.LogInformation($"Término do ciclo às: {DateTime.Now} no ambiente: {_options.Value.MachineDescription} com Duração total: {stopWatch.Elapsed}");
                 }
 
                 await Task.Delay(_options.Value.TempoEspera, stoppingToken);
             }
 
-            telegramController.StopReceiving();
+            //telegramController.StopReceiving();
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)

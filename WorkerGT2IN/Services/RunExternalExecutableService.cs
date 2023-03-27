@@ -18,21 +18,27 @@ namespace WorkerGT2IN.Services
             _arguments = arguments;
         }
 
-        public async Task RunProcessAsync()
+        public async Task<int> RunProcessAsync()
         {
 
             try
             {
                 using Process process = new();
+                int exitCode = new();
                 process.StartInfo.FileName = _filePath;
                 process.StartInfo.Arguments = _arguments;
+                process.StartInfo.Verb = "runas";
+
                 process.StartInfo.CreateNoWindow = true;
-                process.StartInfo.UseShellExecute = false;
-                process.StartInfo.RedirectStandardError = true;
-                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.UseShellExecute = true;
+                process.StartInfo.RedirectStandardError = false;
+                process.StartInfo.RedirectStandardOutput = false;
                 process.Start();
                 await process.WaitForExitAsync();
+                exitCode = process.ExitCode;
                 process.Dispose();
+
+                return exitCode;
             }
             catch
             {

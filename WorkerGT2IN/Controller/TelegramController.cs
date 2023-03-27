@@ -405,7 +405,7 @@ namespace WorkerGT2IN.Controller
                 await oracleConnection.CloseAsync();
                 return true;
             }
-            catch(Exception ex)
+            catch
             {
                 throw;
             }

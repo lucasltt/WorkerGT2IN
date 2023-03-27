@@ -12,6 +12,11 @@ namespace WorkerGT2IN.Entities
         public string HoraAgendamentoDiario { get; set; }
         public bool ForcarPublicacao { get; set; }
 
+        public double LastEpoch { get; set; }
+        public string VersaoServidor { get; set; }
+
+        public bool ForcarCopiaMapa { get; set; }
+
         public bool AtivarAgendamento { get; set; }
 
 
@@ -56,11 +61,15 @@ namespace WorkerGT2IN.Entities
 
         public List<string> ProceduresGTech { get; set; } = new List<string>();
 
+        public List<string> ValidacoesGTech { get; set; } = new List<string>();
+
         public List<(string, string)> ValidacoesIndicadoresCritica { get; set; } = new List<(string, string)>();
 
         public List<(string, string)> ValidacoesIndicadoresAvisos { get; set; } = new List<(string, string)>();
 
         public List<string> Rollback { get; set; } = new List<string>();
+
+        public string MapChangerPath { get; set; }
 
 
         public List<string> Compilar { get; set; } = new List<string>();
@@ -74,9 +83,6 @@ namespace WorkerGT2IN.Entities
         public string ArgumentoOMSMigration { get; set; }
         public string MapaOMSMigration { get; set; }
 
-
-        public bool DeletarArquivoNET { get; set; }
-        public string CaminhoArquivoNET { get; set; }
 
 
 

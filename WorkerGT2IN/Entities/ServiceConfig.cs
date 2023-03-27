@@ -11,8 +11,6 @@ namespace WorkerGT2IN.Entities
         public string GTechConnectionString { get; init; }
         public string InServiceConnectionString { get; init; }
 
-        public string TelegramBotKey { get; init; }
-
         public string MachineDescription { get; init; }
 
         public int TempoEspera { get; init; }
